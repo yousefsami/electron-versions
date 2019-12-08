@@ -55,6 +55,7 @@ export class AppWindow extends BrowserWindow {
         contextIsolation: false,
         javascript: true,
       },
+      show: false,
       icon: resolve(app.getAppPath(), 'static/app-icons/icon.png'),
     });
 
@@ -200,7 +201,6 @@ export class AppWindow extends BrowserWindow {
     // this.webContents.openDevTools({ mode: 'detach' });
 
     if (process.env.NODE_ENV === 'development') {
-      this.webContents.openDevTools({ mode: 'detach' });
       this.loadURL('http://localhost:4444/app.html');
     } else {
       this.loadURL(join('file://', app.getAppPath(), 'build/app.html'));

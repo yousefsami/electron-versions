@@ -20,6 +20,8 @@ export class WindowsManager {
 
   public settings = new Settings(this);
 
+  private bufferWindow: AppWindow;
+
   public constructor() {
     const gotTheLock = app.requestSingleInstanceLock();
 
@@ -67,7 +69,14 @@ export class WindowsManager {
     });
 
     ipcMain.on('create-window', (e, incognito = false) => {
-      this.createWindow(incognito);
+      if (this.bufferWindow.incognito === incognito) {
+        this.bufferWindow.show();
+        this.createWindow(incognito);
+      } else {
+        const win = this.createWindow(incognito);
+        win.show();
+        this.createWindow(incognito);
+      }
     });
 
     this.onReady();
@@ -84,6 +93,13 @@ export class WindowsManager {
 
     this.sessionsManager = new SessionsManager(this);
 
+    const window = this.createWindow();
+    window.show();
+
+    if (process.env.NODE_ENV === 'development') {
+      window.webContents.openDevTools({ mode: 'detach' });
+    }
+
     this.createWindow();
 
     Menu.setApplicationMenu(getMainMenu(this));
@@ -98,6 +114,7 @@ export class WindowsManager {
 
   public createWindow(incognito = false) {
     const window = new AppWindow(this, incognito);
+    this.bufferWindow = window;
     this.list.push(window);
 
     if (incognito) {
@@ -108,6 +125,8 @@ export class WindowsManager {
     } else {
       this.sessionsManager.extensions.addWindow(window);
     }
+
+    return window;
   }
 
   public findWindowByBrowserView(webContentsId: number) {
