@@ -1,10 +1,8 @@
 import * as React from 'react';
 
 import { observable, computed } from 'mobx';
-import { ISuggestion, IVisitedItem } from '~/interfaces';
 import store from '.';
-
-let lastSuggestion: string;
+import { IAutocompleteMatch } from '~/browser/services/omnibox/autocomplete-match';
 
 interface ISearchTab {
   id?: number;
@@ -27,44 +25,18 @@ export class OmniboxStore {
   public visible = false;
 
   @observable
-  public visitedItems: IVisitedItem[] = [];
-
-  @observable
-  public tabs: ISearchTab[] = [];
-
-  @observable
   public inputText = '';
 
-  private textWithoutAutocompletion = '';
+  @observable
+  public suggestions: IAutocompleteMatch[] = [];
+
+  @observable
+  public selectedSuggestionId = 0;
 
   @computed
-  public get searchedTabs(): ISuggestion[] {
-    const lastItem = store.suggestions.list[store.suggestions.list.length - 1];
-
-    let id = 0;
-
-    if (lastItem) {
-      id = lastItem.id + 1;
-    }
-
-    return this.tabs
-      .filter(
-        (tab) =>
-          tab.title.indexOf(this.inputText) !== -1 ||
-          tab.url.indexOf(this.inputText) !== -1,
-      )
-      .map((tab) => ({
-        primaryText: tab.url,
-        secondaryText: tab.title,
-        id: id++,
-        favicon: tab.favicon,
-      }))
-      .slice(0, 3);
-  }
-
-  @computed
-  public get searchEngine() {
-    return store.settings.searchEngines[store.settings.searchEngine];
+  public get selectedSuggestion() {
+    if (this.selectedSuggestionId > this.suggestions.length - 1) return null;
+    return this.suggestions[this.selectedSuggestionId];
   }
 
   public canSuggest = false;
@@ -79,38 +51,34 @@ export class OmniboxStore {
 
       this.visible = true;
 
-      this.tabs = [];
       store.tabId = data.id;
 
       this.canSuggest = this.inputText.length <= data.text.length;
 
-      this.inputRef.current.value = data.text;
-      this.inputRef.current.focus();
+      if (this.inputRef.current) {
+        this.inputRef.current.value = data.text;
+        this.inputRef.current.focus();
 
-      this.inputRef.current.setSelectionRange(data.cursorPos, data.cursorPos);
+        this.inputRef.current.setSelectionRange(data.cursorPos, data.cursorPos);
 
-      const event = new Event('input', { bubbles: true });
-      this.inputRef.current.dispatchEvent(event);
+        const event = new Event('input', { bubbles: true });
+        this.inputRef.current.dispatchEvent(event);
+      }
     });
-
-    browser.ipcRenderer.on('search-tabs', (e, tabs) => {
-      this.tabs = tabs;
-    });
-
-    // this.loadHistory();
   }
 
   public autoComplete(text: string) {
     const input = this.inputRef.current;
+    if (!input) return;
 
-    const start = input.selectionStart;
-    input.value = input.value.substr(0, input.selectionStart) + text;
+    const start = input.selectionStart ?? 0;
+    input.value = input.value.substr(0, start) + text;
 
     input.setSelectionRange(start, input.value.length);
   }
 
   public hide(data: { focus?: boolean; escape?: boolean } = {}) {
-    if (!this.visible) return;
+    if (!this.visible || !this.inputRef.current) return;
 
     browser.ipcRenderer.send(`omnibox-update-input`, {
       id: store.tabId,
@@ -121,9 +89,8 @@ export class OmniboxStore {
     });
 
     this.visible = false;
-    this.tabs = [];
     this.inputText = '';
     this.inputRef.current.value = '';
-    store.suggestions.list = [];
+    this.suggestions = [];
   }
 }

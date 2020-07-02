@@ -1,7 +1,6 @@
 import { observer } from 'mobx-react-lite';
 import * as React from 'react';
 
-import { transparency, ICON_PAGE, ICON_SEARCH } from '~/renderer/constants';
 import {
   StyledSuggestion,
   PrimaryText,
@@ -10,7 +9,6 @@ import {
   Icon,
   Url,
 } from './style';
-import { ISuggestion } from '~/interfaces';
 import store from '../../store';
 import { IAutocompleteMatch } from '~/browser/services/omnibox/autocomplete-match';
 
@@ -18,14 +16,6 @@ interface Props {
   suggestion: IAutocompleteMatch;
   id: number;
 }
-
-const onMouseEnter = (suggestion: IAutocompleteMatch) => () => {
-  suggestion.hovered = true;
-};
-
-const onMouseLeave = (suggestion: IAutocompleteMatch) => () => {
-  suggestion.hovered = false;
-};
 
 const onClick = (suggestion: IAutocompleteMatch) => () => {
   let url = suggestion.destinationUrl; // TODO(sentialx): suggestion.isSearch ? suggestion.primaryText : suggestion.url;
@@ -45,15 +35,13 @@ export const Suggestion = observer(({ suggestion, id }: Props) => {
   // const { hovered } = suggestion;
   const { contents, description, favicon } = suggestion;
 
-  const selected = store.suggestions.selectedId === id;
+  const selected = store.omnibox.selectedSuggestionId === id;
 
   return (
     <StyledSuggestion
       selected={selected}
       hovered={false}
       onClick={onClick(suggestion)}
-      onMouseEnter={onMouseEnter(suggestion)}
-      onMouseLeave={onMouseLeave(suggestion)}
     >
       <Icon
         style={{

@@ -3,32 +3,29 @@ import { observable, computed, action } from 'mobx';
 import { getTheme } from '~/utils/themes';
 import { IMenuItem } from '~/browser/services/context-menus';
 import { randomId } from '~/common/utils/string';
-import { SuggestionsStore } from './suggestions';
 import { OmniboxStore } from './omnibox';
 import { ISettings } from '~/interfaces';
 import { DEFAULT_SETTINGS } from '~/constants/settings';
 
 interface IRegion {
-  left?: number;
-  top?: number;
-  width?: number;
-  height?: number;
-  visible?: boolean;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  visible: boolean;
 }
 
 export interface IMenu {
-  id?: string;
-  menuItems?: IMenuItem[];
-  x?: number;
-  y?: number;
-  forceRight?: number;
-  main?: boolean;
+  id: string;
+  menuItems: IMenuItem[];
+  x: number;
+  y: number;
+  forceRight: boolean;
   parentId?: string;
   childId?: string;
 }
 
 export class Store {
-  public suggestions = new SuggestionsStore();
   public omnibox = new OmniboxStore();
 
   @observable
@@ -72,11 +69,10 @@ export class Store {
           y,
           id,
           forceRight,
-          main: true,
         },
       ];
 
-      document.getElementById('menus').focus();
+      document.getElementById('menus')?.focus();
     });
 
     browser.ipcRenderer.on('extensionPopup-show', (e, x, y) => {
@@ -103,9 +99,15 @@ export class Store {
   @action
   public getRegion(name: string) {
     if (!this.regions.has(name)) {
-      this.regions.set(name, {});
+      this.regions.set(name, {
+        left: 0,
+        top: 0,
+        width: 0,
+        height: 0,
+        visible: false,
+      });
     }
-    return this.regions.get(name);
+    return this.regions.get(name)!;
   }
 
   public removeRegion(name: string) {
@@ -125,25 +127,25 @@ export class Store {
     browser.overlayPrivate.setRegions(regions);
   }
 
-  public updateRegion(name: string, info: IRegion) {
+  public updateRegion(name: string, info: Partial<IRegion>) {
     const region = this.getRegion(name);
     Object.assign(region, info);
 
     this.updateRegions();
   }
 
-  public removeMenu(id: string) {
+  public removeMenu(id: string | undefined) {
     const index = this.menus.findIndex((x) => x.id === id);
     if (index === -1) return;
 
-    if (this.menus[index].childId) this.removeMenu(this.menus[index].childId);
+    if (this.menus[index].childId) this.removeMenu(this.menus[index].childId!);
 
     if (this.menus[index].parentId)
       delete this.menus.find((x) => x.id === this.menus[index].parentId)
         ?.childId;
 
     this.menus.splice(index, 1);
-    this.removeRegion(id);
+    this.removeRegion(id!);
   }
 
   public closeMenu() {

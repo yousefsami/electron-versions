@@ -36,16 +36,21 @@ const Item = observer(
       store.removeMenu(store.menus.find((x) => x.parentId === menuId)?.id);
 
       if (hasSubMenu) {
+        if (!ref.current || !parentMenu) {
+          console.error();
+          return;
+        }
         parentMenu.childId = id;
 
         const menuRegion = store.getRegion(menuId);
 
         store.menus.push({
           id,
-          menuItems: data.submenu,
+          menuItems: data.submenu!,
           x: menuRegion.left,
           y: ref.current.getBoundingClientRect().top - 4,
           parentId: menuId,
+          forceRight: false,
         });
       } else {
         store.closeMenu();
@@ -108,11 +113,12 @@ export const Menu = observer(({ data }: { data: IMenu }) => {
   const measuredRef = React.useRef<HTMLTableElement>(null);
 
   requestAnimationFrame(() => {
+    if (!measuredRef.current) return;
     const { width, height } = measuredRef.current.getBoundingClientRect();
 
     let x = data.x;
 
-    if (!data.main) {
+    if (data.parentId != null) {
       const parentRegion = store.getRegion(data.parentId);
       if (!parentRegion) return;
 
@@ -131,7 +137,7 @@ export const Menu = observer(({ data }: { data: IMenu }) => {
         : x,
       top:
         data.y + height > window.innerHeight
-          ? data.main
+          ? !data.parentId
             ? data.y - height
             : window.innerHeight - height
           : data.y,

@@ -1,7 +1,7 @@
 import styled, { css } from 'styled-components';
-import { transparency, BLUE_300, BLUE_500 } from '~/renderer/constants';
+import { transparency, BLUE_300 } from '~/renderer/constants';
 import { ITheme } from '~/interfaces';
-import { body2, centerIcon } from '~/renderer/mixins';
+import { centerIcon } from '~/renderer/mixins';
 
 export const StyledSuggestion = styled.div`
   width: 100%;
@@ -13,27 +13,26 @@ export const StyledSuggestion = styled.div`
   overflow: hidden;
   ${({
     selected,
-    hovered,
     theme,
   }: {
     selected: boolean;
     hovered: boolean;
     theme?: ITheme;
-  }) => {
-    let backgroundColor = 'transparent';
-    if (selected) {
-      backgroundColor = theme['searchBox.lightForeground']
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(0, 0, 0, 0.06)';
-    } else if (hovered) {
-      backgroundColor = theme['searchBox.lightForeground']
-        ? 'rgba(255, 255, 255, 0.03)'
-        : 'rgba(0, 0, 0, 0.03)';
-    }
-    return css`
-      background-color: ${backgroundColor};
-    `;
-  }};
+  }) => css`
+    ${selected
+      ? css`
+          background-color: ${theme!['searchBox.lightForeground']
+            ? 'rgba(255, 255, 255, 0.06)'
+            : 'rgba(0, 0, 0, 0.06)'};
+        `
+      : css`
+          &:hover {
+            background-color: ${theme!['searchBox.lightForeground']
+              ? 'rgba(255, 255, 255, 0.03)'
+              : 'rgba(0, 0, 0, 0.03)'};
+          }
+        `}
+  `};
 `;
 
 export const SuggestionText = styled.div`
@@ -54,7 +53,7 @@ export const RightText = styled(SuggestionText)`
 
 export const Url = styled(RightText)`
   ${({ theme }: { theme?: ITheme }) => css`
-    color: ${theme['searchBox.lightForeground'] ? BLUE_300 : '#3297FD'};
+    color: ${theme!['searchBox.lightForeground'] ? BLUE_300 : '#3297FD'};
   `}
 `;
 

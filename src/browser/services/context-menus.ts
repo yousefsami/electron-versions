@@ -3,7 +3,7 @@ import { Application } from '../application';
 import { randomId } from '~/common/utils/string';
 
 export interface IMenuItem {
-  id?: string;
+  id: string;
   title?: string;
   submenu?: IMenuItem[];
   enabled?: boolean;
@@ -29,20 +29,21 @@ export class ContextMenusService {
       if (!item) return;
 
       if (item.onClick) {
+        // TODO(sentialx): null check
         item.onClick(item, BrowserWindow.fromWebContents(e.sender));
       }
     });
   }
 
-  public processMenuItems(menuItems: IMenuItem[]) {
+  public processMenuItems(menuItems: Partial<IMenuItem>[]) {
     const items: IMenuItem[] = [];
 
     for (const item of menuItems) {
-      if (!item.id) item.id = randomId();
-      if (this.menuItems.has(item.id))
+      if (item.id == undefined) item.id = randomId();
+      if (this.menuItems.has(item.id!))
         throw new Error('Duplicate menu item id.');
 
-      this.menuItems.set(item.id, item);
+      this.menuItems.set(item.id!, { ...item, id: item.id! });
 
       const newItem: any = { ...item };
       newItem.onClick = true;
@@ -56,7 +57,7 @@ export class ContextMenusService {
     return items;
   }
 
-  public popup(menuItems: IMenuItem[], options?: IPopupOptions) {
+  public popup(menuItems: Partial<IMenuItem>[], options?: IPopupOptions) {
     if (!options) options = {};
 
     const { window } = options;

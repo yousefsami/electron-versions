@@ -3,7 +3,6 @@ import { observer } from 'mobx-react-lite';
 
 import { Input, CurrentIcon, SearchBox, StyledOmnibox } from './style';
 import { Suggestions } from '../Suggestions';
-import { ICON_SEARCH, ICON_PAGE } from '~/renderer/constants';
 import store from '../../store';
 import { IAutocompleteMatch } from '~/browser/services/omnibox/autocomplete-match';
 
@@ -12,31 +11,19 @@ const onKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Enter.
     e.preventDefault();
 
-    const text = e.currentTarget.value;
-    let url = text;
+    const suggestion = store.omnibox.selectedSuggestion;
+    if (!suggestion) return console.error();
 
-    const suggestion = store.suggestions.selected;
-
-    if (suggestion) {
-      if (suggestion.isSearch) {
-        url = store.omnibox.searchEngine.url.replace('%s', text);
-      } else if (text.indexOf('://') === -1) {
-        url = `http://${text}`;
-      }
-    }
-
-    e.currentTarget.value = url;
-
-    browser.tabs.update(store.tabId, { url });
+    browser.tabs.update(store.tabId, { url: suggestion.destinationUrl });
 
     store.omnibox.hide();
   }
 };
 
 const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  const { suggestions } = store;
-  const { list } = suggestions;
   const input = store.omnibox.inputRef.current;
+
+  if (!input) return console.error();
 
   if (e.key === 'Escape') {
     store.omnibox.hide({ focus: true, escape: true });
@@ -44,17 +31,22 @@ const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     if (
       e.keyCode === 40 &&
-      suggestions.selectedId + 1 <=
-        list.length - 1 + store.omnibox.searchedTabs.length
+      store.omnibox.selectedSuggestionId + 1 <=
+        store.omnibox.suggestions.length - 1
     ) {
-      suggestions.selectedId++;
-    } else if (e.keyCode === 38 && suggestions.selectedId - 1 >= 0) {
-      suggestions.selectedId--;
+      store.omnibox.selectedSuggestionId++;
+    } else if (
+      e.keyCode === 38 &&
+      store.omnibox.selectedSuggestionId - 1 >= 0
+    ) {
+      store.omnibox.selectedSuggestionId--;
     }
 
-    const suggestion = list[suggestions.selectedId];
+    const suggestion = store.omnibox.selectedSuggestion;
 
-    input.value = suggestion.isSearch ? suggestion.primaryText : suggestion.url;
+    if (!suggestion) return console.error();
+
+    input.value = suggestion.fillIntoEdit ?? '';
   }
 };
 
@@ -84,28 +76,30 @@ const onInput = async (e: any) => {
 
   const match = matches[0];
   if (match && match.allowedToBeDefaultMatch) {
-    store.omnibox.autoComplete(matches[0].inlineAutocompletion);
-    prevSuggestion = matches[0].inlineAutocompletion;
+    if (!match.inlineAutocompletion) return console.error();
+    store.omnibox.autoComplete(match.inlineAutocompletion);
+    prevSuggestion = match.inlineAutocompletion;
   } else {
     prevSuggestion = '';
     store.omnibox.autoComplete('');
   }
 
-  store.suggestions.list = matches;
-  store.suggestions.selectedId = 0;
+  store.omnibox.suggestions = matches;
+  store.omnibox.selectedSuggestionId = 0;
 };
 
 export const Omnibox = observer(() => {
   const ref = React.useRef<HTMLDivElement>();
 
   const region = store.getRegion('omnibox');
-  const suggestionsVisible = store.suggestions.list.length !== 0;
+  const suggestionsVisible = store.omnibox.suggestions.length !== 0;
 
   const onBlur = React.useCallback(() => {
     store.omnibox.hide();
   }, []);
 
   requestAnimationFrame(() => {
+    if (!ref.current) return;
     const { width, height } = ref.current.getBoundingClientRect();
     store.updateRegion('omnibox', {
       left: store.omnibox.x,
@@ -116,7 +110,7 @@ export const Omnibox = observer(() => {
     });
   });
 
-  const suggestion = store.suggestions.selected;
+  const suggestion = store.omnibox.selectedSuggestion;
 
   const favicon = suggestion?.favicon ?? '';
 
