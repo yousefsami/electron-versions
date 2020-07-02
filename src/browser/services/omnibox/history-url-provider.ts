@@ -513,8 +513,6 @@ export class HistoryURLProvider implements IAutocompleteProvider {
 
     url = parsed.href;
 
-    console.log(params.trimHttp);
-
     if (params.trimHttp && !historyMatch.matchInScheme) {
       // inlineAutocompleteOffset -= url.match(/^(https?:|)\/\//).length;
       url = url.replace(/^(https?:|)\/\//, '');

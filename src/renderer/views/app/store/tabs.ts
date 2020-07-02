@@ -233,8 +233,6 @@ export class TabsStore {
       const tab = this.getTabById(tabId);
       if (!tab) return;
 
-      console.log(faviconUrl);
-
       if (faviconUrl) tab.favicon = `wexond://favicon2/?iconUrl=${faviconUrl}`;
       else tab.favicon = 'wexond://favicon/';
     });

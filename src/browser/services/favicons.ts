@@ -30,6 +30,9 @@ export class FaviconsService {
     );
   };
 
+  public rawFaviconToBase64 = (buffer: Buffer) =>
+    `data:image/png;base64,${buffer.toString('base64')}`;
+
   public getFaviconURLForPageURL = async (pageUrl: string) => {
     return await this.invoker.invoke<string>(
       'getFaviconURLForPageURL',

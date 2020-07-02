@@ -4,6 +4,7 @@
     "noImplicitAny": false,
     "noImplicitReturns": true,
     "noImplicitThis": true,
+    "strictNullChecks": true,
     "alwaysStrict": true,
     "skipLibCheck": true,
     "module": "None",

@@ -59,8 +59,10 @@ class FaviconsService {
       .get({ iconUrl })?.image_data;
   }
 
-  public getRawFaviconForPageURL(pageUrl: string) {
-    return this.db
+  public getRawFaviconForPageURL(pageUrl: string | undefined) {
+    if (!pageUrl) return;
+
+    const res = this.db
       .getCachedStatement(
         `
     SELECT image_data
@@ -70,7 +72,12 @@ class FaviconsService {
     WHERE icon_mapping.page_url=@pageUrl AND favicon_bitmaps.width = 32 LIMIT 1
     `,
       )
-      .get({ pageUrl: fixPageURL(pageUrl) })?.image_data;
+      .get({ pageUrl })?.image_data;
+
+    if (!res && pageUrl[pageUrl.length - 1] !== '/')
+      return this.getRawFaviconForPageURL(fixPageURL(pageUrl));
+
+    return res;
   }
 
   public getFaviconURLForPageURL(pageUrl: string) {
@@ -177,7 +184,9 @@ class FaviconsService {
     const type = await fromBuffer(buffer);
 
     if (type && type.ext === 'ico') {
-      buffer = await convertIcoToPng(buffer);
+      const b = await convertIcoToPng(buffer);
+      if (!b) return;
+      buffer = b;
     }
 
     const instance = sharp(buffer).png();

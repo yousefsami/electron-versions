@@ -43,21 +43,9 @@ const onClick = (suggestion: IAutocompleteMatch) => () => {
 
 export const Suggestion = observer(({ suggestion, id }: Props) => {
   // const { hovered } = suggestion;
-  const { contents, description } = suggestion;
+  const { contents, description, favicon } = suggestion;
 
   const selected = store.suggestions.selectedId === id;
-
-  let { favicon } = suggestion;
-
-  if (suggestion.isSearch) {
-    favicon = ICON_SEARCH;
-  } else {
-    let u = suggestion.destinationUrl;
-    if (!u.startsWith('http')) u = `http://${u}`;
-    favicon = `wexond://favicon/${u}`;
-  }
-
-  const customFavicon = !suggestion.isSearch;
 
   return (
     <StyledSuggestion
@@ -70,12 +58,13 @@ export const Suggestion = observer(({ suggestion, id }: Props) => {
       <Icon
         style={{
           backgroundImage: `url(${favicon})`,
-          opacity: customFavicon ? 1 : transparency.icons.inactive,
-          filter: !customFavicon
-            ? store.theme['searchBox.lightForeground']
-              ? 'invert(100%)'
-              : 'none'
-            : 'none',
+          // TODO(sentialx):
+          // opacity: customFavicon ? 1 : transparency.icons.inactive,
+          // filter: !customFavicon
+          //   ? store.theme['searchBox.lightForeground']
+          //     ? 'invert(100%)'
+          //     : 'none'
+          //   : 'none',
         }}
       />
       {description && <PrimaryText>{description}</PrimaryText>}

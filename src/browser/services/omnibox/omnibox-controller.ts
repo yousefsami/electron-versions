@@ -5,6 +5,7 @@ import { HistoryURLProvider } from './history-url-provider';
 import { IAutocompleteMatch } from './autocomplete-match';
 import { IAutocompleteInput, AutocompleteInput } from './autocomplete-input';
 import { AutocompleteSchemeClassifier } from './autocomplete-classifier';
+import { ICON_PAGE } from '~/renderer/constants';
 
 export class OmniboxController {
   private providers: IAutocompleteProvider[] = [];
@@ -31,6 +32,7 @@ export class OmniboxController {
           schemeClassifier,
         );
         input.preventInlineAutocomplete = justRemoved;
+
         return this.start(input);
       },
     );
@@ -47,10 +49,22 @@ export class OmniboxController {
   public async start(input: IAutocompleteInput): Promise<IAutocompleteMatch[]> {
     if (input.text.trim() === '') return [];
 
-    const matches = [];
+    const matches: IAutocompleteMatch[] = [];
 
     for (const provider of this.providers) {
       matches.push(...(await provider.start(input)));
+    }
+
+    const { favicons } = Application.instance.storage;
+
+    for (const match of matches) {
+      const raw = await favicons.getRawFaviconForPageURL(match.destinationUrl);
+      if (!raw) {
+        match.favicon = ICON_PAGE;
+        continue;
+      }
+
+      match.favicon = favicons.rawFaviconToBase64(raw);
     }
 
     return matches;

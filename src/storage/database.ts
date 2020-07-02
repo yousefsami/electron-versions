@@ -35,6 +35,6 @@ export class Database {
   public getCachedStatement(sql: string) {
     if (!this.statements.has(sql))
       this.statements.set(sql, this._db.prepare(sql));
-    return this.statements.get(sql);
+    return this.statements.get(sql)!;
   }
 }

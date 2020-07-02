@@ -117,20 +117,8 @@ export const Omnibox = observer(() => {
   });
 
   const suggestion = store.suggestions.selected;
-  let favicon = ICON_SEARCH;
-  let customIcon = true;
 
-  if (suggestion && suggestionsVisible) {
-    customIcon = false;
-
-    if (suggestion.isSearch) {
-      favicon = store.omnibox.searchEngine.icon;
-    } else {
-      let u = suggestion.destinationUrl;
-      if (!u.startsWith('http')) u = `http://${u}`;
-      favicon = `wexond://favicon/${u}`;
-    }
-  }
+  const favicon = suggestion?.favicon ?? '';
 
   return (
     <StyledOmnibox
@@ -144,11 +132,11 @@ export const Omnibox = observer(() => {
         <CurrentIcon
           style={{
             backgroundImage: `url(${favicon})`,
-            filter:
-              customIcon && store.theme['dialog.lightForeground']
-                ? 'invert(100%)'
-                : 'none',
-            opacity: customIcon ? 0.54 : 1,
+            // filter:
+            //   customIcon && store.theme['dialog.lightForeground']
+            //     ? 'invert(100%)'
+            //     : 'none',
+            // opacity: customIcon ? 0.54 : 1,
           }}
         ></CurrentIcon>
         <Input

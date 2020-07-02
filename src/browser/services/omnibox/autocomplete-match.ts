@@ -33,6 +33,8 @@ export interface IAutocompleteMatch {
   allowedToBeDefaultMatch?: boolean;
 
   inlineAutocompletion?: string;
+
+  favicon?: string;
 }
 
 export const parsePossiblyInvalidURL = (url: string) => {
