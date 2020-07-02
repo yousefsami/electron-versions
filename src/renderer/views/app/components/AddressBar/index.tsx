@@ -98,7 +98,7 @@ const onChange = (e: React.ChangeEvent<HTMLInputElement>) => {
   const { left, width } = addressbarRef.getBoundingClientRect();
 
   if (e.currentTarget.value.trim() !== '') {
-    browser.ipcRenderer.send(`omnibox-input`, {
+    browser.ipcRenderer.send(`omnibox-input-begin`, {
       id: store.tabs.selectedTabId,
       text: e.currentTarget.value,
       cursorPos: e.currentTarget.selectionStart,

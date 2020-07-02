@@ -5,6 +5,7 @@ import { Input, CurrentIcon, SearchBox, StyledOmnibox } from './style';
 import { Suggestions } from '../Suggestions';
 import { ICON_SEARCH, ICON_PAGE } from '~/renderer/constants';
 import store from '../../store';
+import { IAutocompleteMatch } from '~/browser/services/omnibox/autocomplete-match';
 
 const onKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
   if (e.which === 13) {
@@ -37,8 +38,6 @@ const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
   const { list } = suggestions;
   const input = store.omnibox.inputRef.current;
 
-  store.omnibox.canSuggest = store.omnibox.getCanSuggest(e.keyCode);
-
   if (e.key === 'Escape') {
     store.omnibox.hide({ focus: true, escape: true });
   } else if (e.keyCode === 38 || e.keyCode === 40) {
@@ -53,28 +52,47 @@ const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
       suggestions.selectedId--;
     }
 
-    let suggestion = list.find((x) => x.id === suggestions.selectedId);
-
-    if (!suggestion) {
-      suggestion = store.omnibox.searchedTabs.find(
-        (x) => x.id === suggestions.selectedId,
-      );
-    }
+    const suggestion = list[suggestions.selectedId];
 
     input.value = suggestion.isSearch ? suggestion.primaryText : suggestion.url;
   }
 };
 
-const onInput = (e: any) => {
-  store.omnibox.inputText = e.currentTarget.value;
+let prevSuggestion = '';
 
-  if (e.currentTarget.value.trim() === '') {
+const onInput = async (e: any) => {
+  const text = e.currentTarget.value;
+  const start = e.currentTarget.selectionStart;
+
+  // TODO(sentialx): selecting text and typing a letter also is being treated as removing text.
+  const removed = text.length <= store.omnibox.inputText.length;
+
+  store.omnibox.inputText = text;
+
+  if (!removed) store.omnibox.autoComplete(prevSuggestion.substr(1));
+
+  if (text.trim() === '') {
     store.omnibox.hide({ focus: true });
   }
 
-  // TODO: if (store.settings.object.suggestions) {
-  store.omnibox.suggest();
-  // }
+  const matches: IAutocompleteMatch[] = await browser.ipcRenderer.invoke(
+    'omnibox-input-changed',
+    text,
+    start,
+    removed,
+  );
+
+  const match = matches[0];
+  if (match && match.allowedToBeDefaultMatch) {
+    store.omnibox.autoComplete(matches[0].inlineAutocompletion);
+    prevSuggestion = matches[0].inlineAutocompletion;
+  } else {
+    prevSuggestion = '';
+    store.omnibox.autoComplete('');
+  }
+
+  store.suggestions.list = matches;
+  store.suggestions.selectedId = 0;
 };
 
 export const Omnibox = observer(() => {
@@ -108,7 +126,7 @@ export const Omnibox = observer(() => {
     if (suggestion.isSearch) {
       favicon = store.omnibox.searchEngine.icon;
     } else {
-      let u = suggestion.url;
+      let u = suggestion.destinationUrl;
       if (!u.startsWith('http')) u = `http://${u}`;
       favicon = `wexond://favicon/${u}`;
     }

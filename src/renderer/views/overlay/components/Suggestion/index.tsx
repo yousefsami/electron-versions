@@ -12,21 +12,23 @@ import {
 } from './style';
 import { ISuggestion } from '~/interfaces';
 import store from '../../store';
+import { IAutocompleteMatch } from '~/browser/services/omnibox/autocomplete-match';
 
 interface Props {
-  suggestion: ISuggestion;
+  suggestion: IAutocompleteMatch;
+  id: number;
 }
 
-const onMouseEnter = (suggestion: ISuggestion) => () => {
+const onMouseEnter = (suggestion: IAutocompleteMatch) => () => {
   suggestion.hovered = true;
 };
 
-const onMouseLeave = (suggestion: ISuggestion) => () => {
+const onMouseLeave = (suggestion: IAutocompleteMatch) => () => {
   suggestion.hovered = false;
 };
 
-const onClick = (suggestion: ISuggestion) => () => {
-  let url = suggestion.isSearch ? suggestion.primaryText : suggestion.url;
+const onClick = (suggestion: IAutocompleteMatch) => () => {
+  let url = suggestion.destinationUrl; // TODO(sentialx): suggestion.isSearch ? suggestion.primaryText : suggestion.url;
 
   if (suggestion.isSearch) {
     url = store.omnibox.searchEngine.url.replace('%s', url);
@@ -39,18 +41,18 @@ const onClick = (suggestion: ISuggestion) => () => {
   store.omnibox.hide();
 };
 
-export const Suggestion = observer(({ suggestion }: Props) => {
-  const { hovered } = suggestion;
-  const { primaryText, secondaryText, url } = suggestion;
+export const Suggestion = observer(({ suggestion, id }: Props) => {
+  // const { hovered } = suggestion;
+  const { contents, description } = suggestion;
 
-  const selected = store.suggestions.selectedId === suggestion.id;
+  const selected = store.suggestions.selectedId === id;
 
   let { favicon } = suggestion;
 
   if (suggestion.isSearch) {
     favicon = ICON_SEARCH;
   } else {
-    let u = suggestion.url;
+    let u = suggestion.destinationUrl;
     if (!u.startsWith('http')) u = `http://${u}`;
     favicon = `wexond://favicon/${u}`;
   }
@@ -60,7 +62,7 @@ export const Suggestion = observer(({ suggestion }: Props) => {
   return (
     <StyledSuggestion
       selected={selected}
-      hovered={hovered}
+      hovered={false}
       onClick={onClick(suggestion)}
       onMouseEnter={onMouseEnter(suggestion)}
       onMouseLeave={onMouseLeave(suggestion)}
@@ -76,9 +78,13 @@ export const Suggestion = observer(({ suggestion }: Props) => {
             : 'none',
         }}
       />
-      {primaryText && <PrimaryText>{primaryText}</PrimaryText>}
-      {primaryText && (secondaryText || url) && <Dash>&ndash;</Dash>}
-      {url ? <Url>{url}</Url> : <SecondaryText>{secondaryText}</SecondaryText>}
+      {description && <PrimaryText>{description}</PrimaryText>}
+      {description && contents && <Dash>&ndash;</Dash>}
+      {contents ? (
+        <Url>{contents}</Url>
+      ) : (
+        <SecondaryText>{contents}</SecondaryText>
+      )}
     </StyledSuggestion>
   );
 });

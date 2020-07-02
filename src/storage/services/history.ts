@@ -23,6 +23,8 @@ import { HistoryServiceBase } from '~/common/services/history';
 import { WorkerMessengerFactory } from '~/common/worker-messenger-factory';
 import { registerWorkerEventPropagator } from '../worker-event-handler';
 import { IHistoryPrivateChunkDetails } from '~/interfaces/history-private';
+import { URLRow } from '~/browser/services/omnibox/url-row';
+import { IHistoryService } from '~/browser/services/history-service';
 
 const ITEM_SELECT =
   'SELECT id, last_visit_time, title, typed_count, url, visit_count FROM urls';
@@ -30,7 +32,15 @@ const ITEM_SELECT =
 const VISITS_ITEM_SELECT =
   'SELECT id, url, from_visit, visit_time, transition FROM visits';
 
-class HistoryService extends HistoryServiceBase {
+const HISTORY_URL_ROW_FIELDS =
+  'id, url, title, visit_count, typed_count, last_visit_time, hidden';
+
+const urlToDatabaseUrl = (url: string) => {
+  // TODO(sentialx): Strip username and password from URL before sending to DB.
+  return url;
+};
+
+class HistoryService extends HistoryServiceBase implements IHistoryService {
   public start() {
     const handler = WorkerMessengerFactory.createHandler('history', this);
 
@@ -42,6 +52,9 @@ class HistoryService extends HistoryServiceBase {
     handler('deleteRange', this.deleteRange);
     handler('deleteAll', this.deleteAll);
     handler('getChunk', this.getChunk);
+    handler('autocompleteForPrefix', this.autocompleteForPrefix);
+    handler('findShortestURLFromBase', this.findShortestURLFromBase);
+    handler('getRowForURL', this.getRowForURL);
 
     registerWorkerEventPropagator('history', ['visitRemoved'], this);
   }
@@ -135,6 +148,56 @@ class HistoryService extends HistoryServiceBase {
     return this.db
       .getCachedStatement(`SELECT ${select} FROM urls WHERE url = ? LIMIT 1`)
       .get(url);
+  }
+
+  public async findShortestURLFromBase(
+    base: string,
+    url: string,
+    minVisits: number,
+    minTyped: number,
+    allowBase: boolean,
+  ): Promise<URLRow> {
+    // Select URLs that start with |base| and are prefixes of |url|.  All parts
+    // of this query except the substr() call can be done using the index.  We
+    // could do this query with a couple of LIKE or GLOB statements as well, but
+    // those wouldn't use the index, and would run into problems with "wildcard"
+    // characters that appear in URLs (% for LIKE, or *, ? for GLOB).
+    const sql = `SELECT ${HISTORY_URL_ROW_FIELDS} FROM urls WHERE url ${
+      allowBase ? '>=' : '>'
+    } @base AND url < @url AND url = substr(@url, 1, length(url)) AND hidden = 0 AND visit_count >= @minVisits AND typed_count >= @minTyped ORDER BY url LIMIT 1`;
+
+    return this.db
+      .getCachedStatement(sql)
+      .get({ base, url, minVisits, minTyped });
+  }
+
+  public async getRowForURL(url: string): Promise<URLRow> {
+    return this.db
+      .getCachedStatement(
+        `SELECT ${HISTORY_URL_ROW_FIELDS} FROM urls WHERE url = ?`,
+      )
+      .get(urlToDatabaseUrl(url));
+  }
+
+  public async autocompleteForPrefix(
+    prefix: string,
+    maxResults: number,
+    typedOnly: boolean,
+  ): Promise<URLRow[]> {
+    // TODO(sentialx): use typedOnly
+    const sql = `SELECT ${HISTORY_URL_ROW_FIELDS} FROM urls WHERE url >= @prefix AND url < @endQuery AND hidden = 0 ORDER BY typed_count DESC, visit_count DESC, last_visit_time DESC LIMIT @maxResults`;
+
+    // We will find all strings between "prefix" and this string, which is prefix
+    // followed by the maximum character size. Use 8-bit strings for everything
+    // so we can be sure sqlite is comparing everything in 8-bit mode. Otherwise,
+    // it will have to convert strings either to UTF-8 or UTF-16 for comparison.
+    const endQuery = `${prefix}${String.fromCharCode(255)}`;
+
+    const result = this.db
+      .getCachedStatement(sql)
+      .all({ prefix, endQuery, maxResults });
+
+    return result;
   }
 
   public search({

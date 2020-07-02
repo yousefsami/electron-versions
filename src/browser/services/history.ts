@@ -12,8 +12,11 @@ import { extensions } from '../extensions';
 import { HistoryServiceBase } from '~/common/services/history';
 import { WorkerMessengerFactory } from '~/common/worker-messenger-factory';
 import { IHistoryPrivateChunkDetails } from '~/interfaces/history-private';
+import { URLRow } from './omnibox/url-row';
+import { IHistoryService } from './history-service';
 
-export class HistoryService extends HistoryServiceBase {
+export class HistoryService extends HistoryServiceBase
+  implements IHistoryService {
   private invoker = WorkerMessengerFactory.createInvoker('history');
 
   constructor(worker: Worker) {
@@ -23,6 +26,32 @@ export class HistoryService extends HistoryServiceBase {
     extensions.history.start(this);
     extensions.historyPrivate.start(this);
   }
+
+  public autocompleteForPrefix = (
+    prefix: string,
+    maxResults: number,
+    typedOnly: boolean,
+  ): Promise<URLRow[]> =>
+    this.invoker.invoke('autocompleteForPrefix', prefix, maxResults, typedOnly);
+
+  public findShortestURLFromBase = (
+    base: string,
+    url: string,
+    minVisits: number,
+    minTyped: number,
+    allowBase: boolean,
+  ): Promise<URLRow> =>
+    this.invoker.invoke(
+      'findShortestURLFromBase',
+      base,
+      url,
+      minVisits,
+      minTyped,
+      allowBase,
+    );
+
+  public getRowForURL = (url: string): Promise<URLRow> =>
+    this.invoker.invoke('getRowForURL', url);
 
   public search = (details: IHistorySearchDetails) =>
     this.invoker.invoke<IHistoryItem[]>('search', details);

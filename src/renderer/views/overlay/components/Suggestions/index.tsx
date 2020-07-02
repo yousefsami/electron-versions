@@ -16,8 +16,8 @@ const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
 export const Suggestions = observer(({ visible }: Props) => {
   return (
     <StyledSuggestions visible={visible} onMouseDown={onMouseDown}>
-      {store.suggestions.list.map((suggestion) => (
-        <Suggestion suggestion={suggestion} key={suggestion.id} />
+      {store.suggestions.list.map((suggestion, key) => (
+        <Suggestion suggestion={suggestion} key={key} id={key} />
       ))}
     </StyledSuggestions>
   );

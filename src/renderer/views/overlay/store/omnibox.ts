@@ -35,6 +35,8 @@ export class OmniboxStore {
   @observable
   public inputText = '';
 
+  private textWithoutAutocompletion = '';
+
   @computed
   public get searchedTabs(): ISuggestion[] {
     const lastItem = store.suggestions.list[store.suggestions.list.length - 1];
@@ -98,69 +100,13 @@ export class OmniboxStore {
     // this.loadHistory();
   }
 
-  public getCanSuggest(key: number) {
-    if (
-      key !== 8 && // backspace
-      key !== 13 && // enter
-      key !== 17 && // ctrl
-      key !== 18 && // alt
-      key !== 16 && // shift
-      key !== 9 && // tab
-      key !== 20 && // capslock
-      key !== 46 && // delete
-      key !== 32 // space
-    ) {
-      return true;
-    }
-
-    return false;
-  }
-
-  public async loadHistory() {
-    this.visitedItems = await browser.ipcRenderer.invoke('topsites-get');
-  }
-
-  public suggest() {
-    const { suggestions } = store;
+  public autoComplete(text: string) {
     const input = this.inputRef.current;
 
-    if (this.canSuggest) {
-      this.autoComplete(input.value, lastSuggestion);
-    }
+    const start = input.selectionStart;
+    input.value = input.value.substr(0, input.selectionStart) + text;
 
-    suggestions.load(input).then((suggestion) => {
-      lastSuggestion = suggestion;
-      if (this.canSuggest) {
-        this.autoComplete(
-          input.value.substring(0, input.selectionStart),
-          suggestion,
-        );
-        this.canSuggest = false;
-      }
-    });
-
-    suggestions.selectedId = 0;
-  }
-
-  public autoComplete(text: string, suggestion: string) {
-    const regex = /(http(s?)):\/\/(www.)?|www./gi;
-    const regex2 = /(http(s?)):\/\//gi;
-
-    const start = text.length;
-
-    const input = this.inputRef.current;
-
-    if (input.selectionStart !== input.value.length) return;
-
-    if (suggestion) {
-      if (suggestion.startsWith(text.replace(regex, ''))) {
-        input.value = text + suggestion.replace(text.replace(regex, ''), '');
-      } else if (`www.${suggestion}`.startsWith(text.replace(regex2, ''))) {
-        input.value =
-          text + `www.${suggestion}`.replace(text.replace(regex2, ''), '');
-      }
-      input.setSelectionRange(start, input.value.length);
-    }
+    input.setSelectionRange(start, input.value.length);
   }
 
   public hide(data: { focus?: boolean; escape?: boolean } = {}) {
@@ -176,6 +122,7 @@ export class OmniboxStore {
 
     this.visible = false;
     this.tabs = [];
+    this.inputText = '';
     this.inputRef.current.value = '';
     store.suggestions.list = [];
   }

@@ -7,6 +7,7 @@ import {
 import { isURL } from '~/utils/url';
 import { ISuggestion } from '~/interfaces';
 import store from '.';
+import { IAutocompleteMatch } from '~/browser/services/omnibox/autocomplete-match';
 
 let searchSuggestions: ISuggestion[] = [];
 
@@ -14,7 +15,7 @@ const MAX_SUGGESTIONS_COUNT = 8;
 
 export class SuggestionsStore {
   @observable
-  public list: ISuggestion[] = [];
+  public list: IAutocompleteMatch[] = [];
 
   @observable
   public selectedId = 0;
@@ -24,7 +25,7 @@ export class SuggestionsStore {
 
   @computed
   public get selected() {
-    return this.list.find((x) => x.id === this.selectedId);
+    return this.list[this.selectedId];
   }
 
   public load(input: HTMLInputElement): Promise<string> {
