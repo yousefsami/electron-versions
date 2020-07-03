@@ -3,15 +3,19 @@ import { Application } from './application';
 import { extensions } from './extensions';
 
 export const hookTabEvents = (tab: Tab) => {
-  tab.webContents.on('page-favicon-updated', async (e, favicons) => {
-    await Application.instance.storage.favicons.saveFavicon(
-      tab.webContents.getURL(),
-      favicons[0],
+  tab.webContents.on('page-favicon-updated', async (e, faviconUrls) => {
+    const { favicons } = Application.instance.storage;
+
+    await favicons.saveFavicon(tab.webContents.getURL(), faviconUrls[0]);
+    // Since we saved the favicon above, we can safely assume that it is not undefined.
+    const faviconBase64 = favicons.rawFaviconToBase64(
+      (await favicons.getFavicon(faviconUrls[0]))!,
     );
+
     extensions.tabsPrivate.sendEventToAll(
       'onFaviconUpdated',
       tab.id,
-      favicons[0],
+      faviconBase64,
     );
   });
 };

@@ -3,6 +3,7 @@ import { extensions } from './extensions';
 import { BrowserWindow, ipcMain } from 'electron';
 import { Application } from './application';
 import { parse } from 'url';
+import { ICON_PAGE } from '~/renderer/constants';
 
 export class Tabs {
   public tabs: Map<number, Tab> = new Map();
@@ -92,11 +93,10 @@ export class Tabs {
       );
     }
 
-    extensions.tabsPrivate.sendEventToAll(
-      'onFaviconUpdated',
-      tabId,
-      faviconUrl,
-    );
+    const buffer = await favicons.getFavicon(faviconUrl);
+    const base64 = buffer ? favicons.rawFaviconToBase64(buffer) : ICON_PAGE;
+
+    extensions.tabsPrivate.sendEventToAll('onFaviconUpdated', tabId, base64);
   }
 
   public destroy(id: number) {

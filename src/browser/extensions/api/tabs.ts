@@ -373,6 +373,7 @@ export class TabsAPI extends EventHandler implements ITabsEvents {
       'did-start-navigation', // url
       'did-redirect-navigation', // url
       'did-navigate-in-page', // url
+      'did-navigate', // url
     ];
 
     updateEvents.forEach((eventName) => {

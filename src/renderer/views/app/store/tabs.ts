@@ -229,12 +229,11 @@ export class TabsStore {
       tab.close();
     });
 
-    browser.tabsPrivate.onFaviconUpdated.addListener((tabId, faviconUrl) => {
+    browser.tabsPrivate.onFaviconUpdated.addListener((tabId, favicon) => {
       const tab = this.getTabById(tabId);
       if (!tab) return;
 
-      if (faviconUrl) tab.favicon = `wexond://favicon2/?iconUrl=${faviconUrl}`;
-      else tab.favicon = 'wexond://favicon/';
+      tab.favicon = favicon;
     });
 
     browser.tabs.onUpdated.addListener(
