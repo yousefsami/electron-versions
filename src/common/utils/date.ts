@@ -5,7 +5,6 @@ export const convertFromChromeTime = (time: number) => {
 };
 
 export const convertToChromeTime = (time: number) => {
-  if (!time) return null;
   return (time + EPOCH) * 1000;
 };
 

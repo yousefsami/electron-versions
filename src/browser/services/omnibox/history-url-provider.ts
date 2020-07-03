@@ -2,16 +2,13 @@ import { IAutocompleteProvider } from './autocomplete-provider';
 import { URLPrefix } from './url-prefix';
 import { Application } from '~/browser/application';
 import { convertToChromeTime } from '~/common/utils/date';
-import { parse, format } from 'url';
-import {
-  IAutocompleteMatch,
-  getMatchComponents,
-  parsePossiblyInvalidURL,
-} from './autocomplete-match';
+import { format } from 'url';
+import { IAutocompleteMatch, getMatchComponents } from './autocomplete-match';
 import { IHistoryMatch } from './history-match';
 import { IHistoryService } from '../history-service';
 import { URLRow } from './url-row';
 import { IAutocompleteInput, OmniboxInputType } from './autocomplete-input';
+import { DCHECK } from '~/common/utils/debug';
 
 const kLowQualityMatchTypedLimit = 1;
 const kLowQualityMatchVisitLimit = 4;
@@ -57,7 +54,7 @@ const hasHTTPScheme = (input: string) => {
   return input.startsWith('http');
 };
 
-export const isNonEmpty = (s: string) =>
+export const isNonEmpty = (s: string | undefined) =>
   s != null && s.length > 0 && s !== 'empty:';
 
 export const numNonHostComponents = (url: URL) => {
@@ -80,22 +77,24 @@ export const isStringAValidURL = (s: string) => {
   }
 };
 
-interface IHistoryURLProviderParams {
+export class HistoryURLProvider implements IAutocompleteProvider {
+  public static DEFAULT_MAX_MATCHES_PER_PROVIDER = 3;
+
   // A copy of the autocomplete input. We need the copy since this object will
   // live beyond the original query while it runs on the history thread.
-  input?: IAutocompleteInput;
+  private input: IAutocompleteInput;
 
   // |input_before_fixup| is needed for invoking
   // |AutocompleteMatch::SetAllowedToBeDefault| which considers
   // trailing input whitespaces which the fixed up |input| will have trimmed.
-  inputBeforeFixup?: IAutocompleteInput;
+  private inputBeforeFixup: IAutocompleteInput;
 
   // List of matches written by DoAutocomplete().  Upon its return the provider
   // converts this list to ACMatches and places them in |matches_|.
-  matches?: IHistoryMatch[];
+  private matches: IHistoryMatch[];
 
   // Set when "http://" should be trimmed from the beginning of the URLs.
-  trimHttp?: boolean;
+  private trimHttp: boolean;
 
   // True if the suggestion for exactly what the user typed appears as a known
   // URL in the user's history.  In this case, this will also be the first match
@@ -105,15 +104,15 @@ interface IHistoryURLProviderParams {
   // between passes and how we deal with intranet URLs, which are too complex to
   // explain here; see the implementations of DoAutocomplete() and
   // FixupExactSuggestion() for specific comments.
-  exactSuggestionIsInHistory?: boolean;
+  private exactSuggestionIsInHistory: boolean;
 
   // True if |what_you_typed_match| is eligible for display.  If this is true,
   // PromoteMatchesIfNecessary() may choose to place |what_you_typed_match| on
   // |matches_| even when |promote_type| is not WHAT_YOU_TYPED_MATCH.
-  haveWhatYouTypedMatch?: boolean;
+  private haveWhatYouTypedMatch: boolean;
 
   // A match corresponding to what the user typed.
-  whatYouTypedMatch?: IAutocompleteMatch;
+  private whatYouTypedMatch: IAutocompleteMatch;
 
   // Tells the provider whether to promote the what you typed match, the first
   // element of |matches|, or neither as the first AutocompleteMatch.  If
@@ -123,29 +122,28 @@ interface IHistoryURLProviderParams {
   //
   // NOTE: The second pass of DoAutocomplete() checks what the first pass set
   // this to.  See comments in DoAutocomplete().
-  promoteType?: PromoteType;
-}
-
-export class HistoryURLProvider implements IAutocompleteProvider {
-  public static DEFAULT_MAX_MATCHES_PER_PROVIDER = 3;
+  private promoteType: PromoteType;
 
   async start(input: IAutocompleteInput) {
-    const params: IHistoryURLProviderParams = {
-      matches: [],
-      input, // TODO(sentialx): fixup input
-      inputBeforeFixup: input,
-      trimHttp: !hasHTTPScheme(input.text),
-      promoteType: PromoteType.NEITHER,
-      whatYouTypedMatch: {
-        destinationUrl: input.text,
-        fillIntoEdit: input.text,
-        contents: input.text,
-      },
+    this.matches = [];
+    this.input = input; // TODO(sentialx): fixup input
+    this.inputBeforeFixup = input;
+    this.trimHttp = !hasHTTPScheme(input.text);
+    this.promoteType = PromoteType.NEITHER;
+    this.whatYouTypedMatch = {
+      destinationUrl: input.text,
+      fillIntoEdit: input.text,
+      contents: input.text,
+      allowedToBeDefaultMatch: false,
+      deletable: false,
+      inlineAutocompletion: '',
+      relevance: 0,
+      typedCount: 0,
     };
 
-    await this.doAutocomplete(Application.instance.storage.history, params);
+    await this.doAutocomplete(Application.instance.storage.history);
 
-    return this.queryComplete(params);
+    return this.queryComplete();
   }
 
   // Returns whether |match| is suitable for inline autocompletion.
@@ -191,18 +189,15 @@ export class HistoryURLProvider implements IAutocompleteProvider {
     return true;
   }
 
-  async promoteOrCreateShorterSuggestion(
-    historyService: IHistoryService,
-    params: IHistoryURLProviderParams,
-  ) {
-    if (params.matches.length === 0) return false; // No matches, nothing to do.
+  async promoteOrCreateShorterSuggestion(historyService: IHistoryService) {
+    if (this.matches.length === 0) return false; // No matches, nothing to do.
 
     // Determine the base URL from which to search, and whether that URL could
     // itself be added as a match.  We can add the base iff it's not "effectively
     // the same" as any "what you typed" match.
-    const match = params.matches[0];
-    let searchBase = convertToHostOnly(match, params.input.text);
-    let canAddSearchBaseToMatches = !params.haveWhatYouTypedMatch;
+    const match = this.matches[0];
+    let searchBase = convertToHostOnly(match, this.input.text);
+    let canAddSearchBaseToMatches = !this.haveWhatYouTypedMatch;
 
     if (searchBase.length === 0) {
       // Search from what the user typed when we couldn't reduce the best match
@@ -214,18 +209,17 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       // TODO: this should be cleaned up, and is probably incorrect for IDN.
       const newMatch = match.urlInfo.url.substr(
         0,
-        match.inputLocation + params.input.text.length,
+        match.inputLocation + this.input.text.length,
       );
       searchBase = newMatch;
       if (searchBase.length === 0) return false; // Can't construct a URL from which to start a search.
     } else if (!canAddSearchBaseToMatches) {
       canAddSearchBaseToMatches =
-        searchBase != params.whatYouTypedMatch.destinationUrl;
+        searchBase != this.whatYouTypedMatch.destinationUrl;
     }
 
     if (searchBase === match.urlInfo.url) return false; // Couldn't shorten |match|, so no URLs to search over.
 
-    let info: URLRow = { url: searchBase };
     // Search the DB for short URLs between our base and |match|.
     let promote = true;
     // A short URL is only worth suggesting if it's been visited at least a third
@@ -239,7 +233,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
     // autocomplete, unstable.
     const minTypedCount = match.urlInfo.typed_count ? 1 : 0;
 
-    info = await historyService.findShortestURLFromBase(
+    let info = await historyService.findShortestURLFromBase(
       searchBase,
       match.urlInfo.url,
       minVisitCount,
@@ -262,15 +256,12 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       promote && this.canPromoteMatchForInlineAutocomplete(match);
 
     return (
-      this.createOrPromoteMatch(info, match, params.matches, true, promote) &&
+      this.createOrPromoteMatch(info, match, this.matches, true, promote) &&
       ensureCanInline
     );
   }
 
-  async doAutocomplete(
-    historyService: IHistoryService,
-    params: IHistoryURLProviderParams,
-  ) {
+  async doAutocomplete(historyService: IHistoryService) {
     // Get the matching URLs from the DB.
     const prefixes = URLPrefix.getURLPrefixes();
     for (const prefix of prefixes) {
@@ -280,7 +271,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       // for more results than we need, of every prefix type, in hopes this will
       // give us far more than enough to work with.  CullRedirects() will then
       // reduce the list to the best provider_max_matches_ results.
-      const prefixedInput = `${prefix.prefix}${params.input.text}`;
+      const prefixedInput = `${prefix.prefix}${this.input.text}`;
       const urlMatches = await historyService.autocompleteForPrefix(
         prefixedInput,
         HistoryURLProvider.DEFAULT_MAX_MATCHES_PER_PROVIDER * 2,
@@ -290,22 +281,24 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       for (const urlMatch of urlMatches) {
         const url = urlMatch.url;
         const bestPrefix = URLPrefix.bestURLPrefix(url, '');
+        DCHECK(bestPrefix);
 
         const match: IHistoryMatch = {
           urlInfo: urlMatch,
           inputLocation: prefix.prefix.length,
-          innermostMatch: prefix.componentsCount >= bestPrefix.componentsCount,
+          innermostMatch:
+            prefix.componentsCount >= (bestPrefix?.componentsCount ?? 0),
           ...getMatchComponents(url, [
             [prefix.prefix.length, prefixedInput.length],
           ]),
         };
 
-        params.matches.push(match);
+        this.matches.push(match);
       }
     }
 
-    this.cullPoorMatches(params.matches);
-    this.sortAndDedupMatches(params.matches);
+    this.cullPoorMatches(this.matches);
+    this.sortAndDedupMatches(this.matches);
 
     // Try to create a shorter suggestion from the best match.
     // We consider the what you typed match eligible for display when it's
@@ -315,21 +308,20 @@ export class HistoryURLProvider implements IAutocompleteProvider {
     // searching has been disabled by policy. In the cases where we've parsed as
     // UNKNOWN, we'll still show an accidental search infobar if need be.
     // TODO(sentialx): VisitClassifier
-    params.haveWhatYouTypedMatch =
-      params.input.type !== OmniboxInputType.QUERY &&
-      (params.input.type !== OmniboxInputType.UNKNOWN ||
-        !params.trimHttp ||
-        numNonHostComponents(params.input.url) > 0);
+    this.haveWhatYouTypedMatch =
+      this.input.type !== OmniboxInputType.QUERY &&
+      (this.input.type !== OmniboxInputType.UNKNOWN ||
+        !this.trimHttp ||
+        numNonHostComponents(this.input.url) > 0);
 
     const haveShorterSuggestionSuitableForInlineAutocomplete = await this.promoteOrCreateShorterSuggestion(
       historyService,
-      params,
     );
     // Check whether what the user typed appears in history.
     const canCheckHistoryForExactMatch =
       // Checking what_you_typed_match.destination_url.is_valid() tells us
       // whether SuggestExactInput() succeeded in constructing a valid match.
-      isStringAValidURL(params.whatYouTypedMatch.destinationUrl) &&
+      isStringAValidURL(this.whatYouTypedMatch.destinationUrl) &&
       // Additionally, in the case where the user has typed "foo.com" and
       // visited (but not typed) "foo/", and the input is "foo", the first pass
       // will fall into the FRONT_HISTORY_MATCH case for "foo.com" but the
@@ -341,7 +333,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       // suggest the exact input as a better match.  (Note that during the first
       // pass, this conditional will always succeed since |promote_type| is
       // initialized to NEITHER.)
-      params.promoteType !== PromoteType.FRONT_HISTORY_MATCH;
+      this.promoteType !== PromoteType.FRONT_HISTORY_MATCH;
     // TODO(sentialx):
     // params.exactSuggestionIsInHistory = canCheckHistoryForExactMatch &&
     //     FixupExactSuggestion(db, classifier, params);
@@ -350,12 +342,12 @@ export class HistoryURLProvider implements IAutocompleteProvider {
     // we should treat it as the best match regardless of input type.  If not,
     // then we check whether there's an inline autocompletion we can create from
     // this input, so we can promote that as the best match.
-    if (params.exactSuggestionIsInHistory) {
-      params.promoteType = PromoteType.WHAT_YOU_TYPED_MATCH;
+    if (this.exactSuggestionIsInHistory) {
+      this.promoteType = PromoteType.WHAT_YOU_TYPED_MATCH;
     } else if (
-      params.matches.length !== 0 &&
+      this.matches.length !== 0 &&
       (haveShorterSuggestionSuitableForInlineAutocomplete ||
-        this.canPromoteMatchForInlineAutocomplete(params.matches[0]))
+        this.canPromoteMatchForInlineAutocomplete(this.matches[0]))
     ) {
       // Note that we promote this inline-autocompleted match even when
       // params->prevent_inline_autocomplete is true.  This is safe because in
@@ -369,19 +361,19 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       //   * Otherwise, we should have some sort of QUERY or UNKNOWN input that
       //     the SearchProvider will provide a defaultable what-you-typed match
       //     for.
-      params.promoteType = PromoteType.FRONT_HISTORY_MATCH;
+      this.promoteType = PromoteType.FRONT_HISTORY_MATCH;
     } else {
       // Failed to promote any URLs.  Use the What You Typed match, if we have it.
-      params.promoteType = params.haveWhatYouTypedMatch
+      this.promoteType = this.haveWhatYouTypedMatch
         ? PromoteType.WHAT_YOU_TYPED_MATCH
         : PromoteType.NEITHER;
     }
 
     const maxResults =
       HistoryURLProvider.DEFAULT_MAX_MATCHES_PER_PROVIDER +
-      (params.exactSuggestionIsInHistory ? 1 : 0);
+      (this.exactSuggestionIsInHistory ? 1 : 0);
 
-    params.matches = params.matches.slice(0, maxResults + 1);
+    this.matches = this.matches.slice(0, maxResults + 1);
   }
 
   // TODO(sentialx): move to URLDatabase
@@ -392,8 +384,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
   rowQualifiesAsSignificant(row: URLRow, threshold: number) {
     if (row.hidden) return false;
 
-    const realThreshold =
-      threshold == null ? this.autocompleteAgeThreshold() : threshold;
+    const realThreshold = threshold ?? this.autocompleteAgeThreshold();
 
     return (
       row.typed_count >= kLowQualityMatchTypedLimit ||
@@ -481,11 +472,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
   }
 
   // TODO(sentialx)
-  historyMatchToACMatch(
-    params: IHistoryURLProviderParams,
-    historyMatch: IHistoryMatch,
-    relevance: number,
-  ) {
+  historyMatchToACMatch(historyMatch: IHistoryMatch, relevance: number) {
     const { urlInfo } = historyMatch;
 
     const match: IAutocompleteMatch = {
@@ -496,9 +483,11 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       contents: urlInfo.url,
       description: urlInfo.title,
       deletable: !!urlInfo.visit_count,
+      allowedToBeDefaultMatch: false,
+      inlineAutocompletion: '',
     };
 
-    const inlineAutocompleteOffset = params.input.text.length;
+    const inlineAutocompleteOffset = this.input.text.length;
 
     let { url } = urlInfo;
 
@@ -513,7 +502,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
 
     url = parsed.href;
 
-    if (params.trimHttp && !historyMatch.matchInScheme) {
+    if (this.trimHttp && !historyMatch.matchInScheme) {
       // inlineAutocompleteOffset -= url.match(/^(https?:|)\/\//).length;
       url = url.replace(/^(https?:|)\/\//, '');
     }
@@ -525,7 +514,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
 
     if (
       inlineAutocompleteOffset !== -1 &&
-      !params.input.preventInlineAutocomplete
+      !this.input.preventInlineAutocomplete
     ) {
       match.inlineAutocompletion = match.fillIntoEdit.substr(
         inlineAutocompleteOffset,
@@ -536,14 +525,11 @@ export class HistoryURLProvider implements IAutocompleteProvider {
     return match;
   }
 
-  promoteMatchesIfNecessary(
-    params: IHistoryURLProviderParams,
-    matches: IAutocompleteMatch[],
-  ) {
+  promoteMatchesIfNecessary(matches: IAutocompleteMatch[]) {
     // TODO(sentialx): calculate relevance
-    if (params.promoteType === PromoteType.NEITHER) return;
-    if (params.promoteType === PromoteType.FRONT_HISTORY_MATCH) {
-      matches.push(this.historyMatchToACMatch(params, params.matches[0], 1000));
+    if (this.promoteType === PromoteType.NEITHER) return;
+    if (this.promoteType === PromoteType.FRONT_HISTORY_MATCH) {
+      matches.push(this.historyMatchToACMatch(this.matches[0], 1000));
     }
     // There are two cases where we need to add the what-you-typed-match:
     //   * If params.promote_type is WHAT_YOU_TYPED_MATCH, we're being explicitly
@@ -559,30 +545,30 @@ export class HistoryURLProvider implements IAutocompleteProvider {
     //     params.have_what_you_typed_match is false, the SearchProvider should
     //     take care of adding this defaultable match.)
     if (
-      params.promoteType === PromoteType.WHAT_YOU_TYPED_MATCH ||
+      this.promoteType === PromoteType.WHAT_YOU_TYPED_MATCH ||
       (!matches[matches.length - 1].allowedToBeDefaultMatch &&
-        params.haveWhatYouTypedMatch)
+        this.haveWhatYouTypedMatch)
     ) {
-      if (params.input.preventInlineAutocomplete) {
-        matches.unshift(params.whatYouTypedMatch);
+      if (this.input.preventInlineAutocomplete) {
+        matches.unshift(this.whatYouTypedMatch);
       } else {
-        matches.push(params.whatYouTypedMatch);
+        matches.push(this.whatYouTypedMatch);
       }
     }
   }
 
-  queryComplete(params: IHistoryURLProviderParams) {
+  queryComplete() {
     const newMatches: IAutocompleteMatch[] = [];
 
-    this.promoteMatchesIfNecessary(params, newMatches);
+    this.promoteMatchesIfNecessary(newMatches);
     let relevance = 999;
 
     const firstMatch =
-      params.exactSuggestionIsInHistory ||
-      params.promoteType === PromoteType.FRONT_HISTORY_MATCH
+      this.exactSuggestionIsInHistory ||
+      this.promoteType === PromoteType.FRONT_HISTORY_MATCH
         ? 1
         : 0;
-    for (let i = firstMatch; i < params.matches.length; ++i) {
+    for (let i = firstMatch; i < this.matches.length; ++i) {
       // All matches score one less than the previous match.
       --relevance;
 
@@ -591,9 +577,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
         // relevance = CalculateRelevanceScoreUsingScoringParams(
         //  params->matches[i], relevance, scoring_params_);
       }
-      newMatches.push(
-        this.historyMatchToACMatch(params, params.matches[i], relevance),
-      );
+      newMatches.push(this.historyMatchToACMatch(this.matches[i], relevance));
     }
 
     return newMatches;

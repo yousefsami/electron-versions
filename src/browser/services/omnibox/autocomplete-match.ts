@@ -2,7 +2,7 @@ export interface IAutocompleteMatch {
   // The URL to actually load when the autocomplete item is selected. This URL
   // should be canonical so we can compare URLs with strcmp to avoid dupes.
   // It may be empty if there is no possible navigation.
-  destinationUrl?: string;
+  destinationUrl: string;
 
   // Additional helper text for each entry, such as a title or description.
   description?: string;
@@ -10,7 +10,7 @@ export interface IAutocompleteMatch {
   // This string is loaded into the location bar when the item is selected
   // by pressing the arrow keys. This may be different than a URL, for example,
   // for search suggestions, this would just be the search terms.
-  fillIntoEdit?: string;
+  fillIntoEdit: string;
 
   // The main text displayed in the address bar dropdown.
   contents?: string;
@@ -19,20 +19,20 @@ export interface IAutocompleteMatch {
   // returned by various providers. This is used to rank matches among all
   // responding providers, so different providers must be carefully tuned to
   // supply matches with appropriate relevance.
-  relevance?: number;
+  relevance: number;
 
   // How many times this result was typed in / selected from the omnibox.
   // Only set for some providers and result_types.  If it is not set,
   // its value is -1.  At the time of writing this comment, it is only
   // set for matches from HistoryURL and HistoryQuickProvider.
-  typedCount?: number;
+  typedCount: number;
 
   // True if the user should be able to delete this match.
-  deletable?: boolean;
+  deletable: boolean;
 
-  allowedToBeDefaultMatch?: boolean;
+  allowedToBeDefaultMatch: boolean;
 
-  inlineAutocompletion?: string;
+  inlineAutocompletion: string;
 
   favicon?: string;
 }

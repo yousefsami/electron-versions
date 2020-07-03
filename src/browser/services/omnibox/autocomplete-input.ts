@@ -121,32 +121,32 @@ enum KeywordModeEntryMethod {
 }
 
 export interface IAutocompleteInput {
-  cursorPosition?: number;
-  currentPageClassification?: PageClassification;
-  type?: OmniboxInputType;
-  preventInlineAutocomplete?: boolean;
-  preferKeyword?: boolean;
-  allowExactKeywordMatch?: boolean;
-  keywordModeEntryMethod?: KeywordModeEntryMethod;
-  wantAsynchronousMatches?: boolean;
-  fromOmniboxFocus?: boolean;
-  text?: string;
-  desiredTld?: string;
-  termsPrefixedByHttpOrHttps?: string[];
-  currentTitle?: string;
-  scheme?: string;
-  canonicalizedUrl?: string;
-  url?: URL;
+  cursorPosition: number;
+  currentPageClassification: PageClassification;
+  type: OmniboxInputType;
+  preventInlineAutocomplete: boolean;
+  preferKeyword: boolean;
+  allowExactKeywordMatch: boolean;
+  keywordModeEntryMethod: KeywordModeEntryMethod;
+  wantAsynchronousMatches: boolean;
+  fromOmniboxFocus: boolean;
+  text: string;
+  desiredTld: string;
+  termsPrefixedByHttpOrHttps: string[];
+  currentTitle: string;
+  scheme: string;
+  canonicalizedUrl: string;
+  url: URL;
 }
 
 enum HostnameFamily {
   IPV6 = 6,
   IPV4 = 4,
-  NEUTRAL = undefined,
+  NEUTRAL = 0,
 }
 
 const getHostnameFamily = (str: string): HostnameFamily => {
-  return ip.version(str);
+  return ip.version(str) ?? 0;
 };
 
 export class AutocompleteInput {
@@ -163,11 +163,13 @@ export class AutocompleteInput {
   }
 
   public static init(
-    options: IAutocompleteInput,
+    options: Partial<IAutocompleteInput>,
     schemeClassifier?: IAutocompleteSchemeClassifier,
-  ) {
-    let input = Object.assign(
+  ): IAutocompleteInput {
+    let input: IAutocompleteInput = Object.assign(
       {
+        text: '',
+        desiredTld: '',
         cursorPosition: -1,
         currentPageClassification: PageClassification.INVALID_SPEC,
         type: OmniboxInputType.EMPTY,
@@ -177,8 +179,12 @@ export class AutocompleteInput {
         keywordModeEntryMethod: KeywordModeEntryMethod.INVALID,
         wantAsynchronousMatches: true,
         fromOmniboxFocus: false,
+        termsPrefixedByHttpOrHttps: [],
+        currentTitle: '',
+        scheme: '',
+        canonicalizedUrl: '',
       },
-      options,
+      options as any,
     );
 
     // None of the providers care about leading white space so we always trim it.
@@ -196,62 +202,71 @@ export class AutocompleteInput {
 
     input = {
       ...input,
-      ...AutocompleteInput.parse(input, schemeClassifier),
+      ...AutocompleteInput.parse(schemeClassifier, input.text),
     };
 
     return input;
   }
 
   public static parse(
-    input: IAutocompleteInput,
     schemeClassifier: IAutocompleteSchemeClassifier,
+    text: string,
+    desiredTld?: string,
   ) {
-    input = { ...input };
+    const result: Pick<
+      IAutocompleteInput,
+      'type' | 'canonicalizedUrl' | 'url' | 'scheme'
+    > = {
+      type: OmniboxInputType.UNKNOWN,
+      canonicalizedUrl: null!,
+      url: null!,
+      scheme: null!,
+    };
 
-    if (input.text.trim() === '') {
-      input.type = OmniboxInputType.EMPTY;
-      return input; // All whitespace.
+    if (text.trim() === '') {
+      result.type = OmniboxInputType.EMPTY;
+      return result; // All whitespace.
     }
 
-    const hasKnownTld = input.text.indexOf('.') !== -1;
+    const hasKnownTld = text.indexOf('.') !== -1;
     // Ask our parsing back-end to help us understand what the user typed.  We
     // use the URLFixerUpper here because we want to be smart about what we
     // consider a scheme.  For example, we shouldn't consider www.google.com:80
     // to have a scheme.
-    input.url = parsePossiblyInvalidURL(input.text);
-    input.canonicalizedUrl = input.url.href;
+    result.url = parsePossiblyInvalidURL(text);
+    result.canonicalizedUrl = result.url.href;
 
-    if (input.url.protocol === 'empty:') {
-      const newUrl = new URL(input.url.href);
+    if (result.url.protocol === 'empty:') {
+      const newUrl = new URL(result.url.href);
       newUrl.protocol = 'http:';
-      input.canonicalizedUrl = newUrl.href;
+      result.canonicalizedUrl = newUrl.href;
     }
 
-    if (input.scheme) input.scheme = input.url.protocol;
+    result.scheme = result.url.protocol;
 
     // If we can't canonicalize the user's input, the rest of the autocomplete
     // system isn't going to be able to produce a navigable URL match for it.
     // So we just return QUERY immediately in these cases.
     // input.canonicalizedUrl = input.text; // TODO(sentialx): FixupURL()
 
-    if (!isStringAValidURL(input.canonicalizedUrl)) {
-      input.type = OmniboxInputType.QUERY;
-      return input;
+    if (!isStringAValidURL(result.canonicalizedUrl)) {
+      result.type = OmniboxInputType.QUERY;
+      return result;
     }
 
-    if (input.url.protocol === 'file:') {
+    if (result.url.protocol === 'file:') {
       // A user might or might not type a scheme when entering a file URL.  In
       // either case, |parsed_scheme_utf8| will tell us that this is a file URL,
       // but |parts->scheme| might be empty, e.g. if the user typed "C:\foo".
-      input.type = OmniboxInputType.URL;
-      return input;
+      result.type = OmniboxInputType.URL;
+      return result;
     }
 
     // Treat javascript: scheme queries followed by things that are unlikely to
     // be code as UNKNOWN, rather than script to execute (URL).
-    if (input.text.match(/javascript:([^;=().\"]*)/)) {
-      input.type = OmniboxInputType.UNKNOWN;
-      return input;
+    if (text.match(/javascript:([^;=().\"]*)/)) {
+      result.type = OmniboxInputType.UNKNOWN;
+      return result;
     }
 
     // If the user typed a scheme, and it's HTTP or HTTPS, we know how to parse it
@@ -261,14 +276,14 @@ export class AutocompleteInput {
     // (e.g. "ftp" or "view-source") but I'll wait to spend the effort on that
     // until I run into some cases that really need it.
     if (
-      isNonEmpty(input.url.protocol) &&
-      input.url.protocol !== 'http' &&
-      input.url.protocol !== 'https'
+      isNonEmpty(result.url.protocol) &&
+      result.url.protocol !== 'http' &&
+      result.url.protocol !== 'https'
     ) {
-      const type = schemeClassifier.getInputTypeForScheme(input.url.protocol);
+      const type = schemeClassifier.getInputTypeForScheme(result.url.protocol);
       if (type !== OmniboxInputType.EMPTY) {
-        input.type = type;
-        return input;
+        result.type = type;
+        return result;
       }
 
       // We don't know about this scheme.  It might be that the user typed a
@@ -280,8 +295,9 @@ export class AutocompleteInput {
         url: httpUrl,
         canonicalizedUrl: httpCanonicalizedUrl,
       } = AutocompleteInput.parse(
-        { text: httpSchemePrefix + input.text, desiredTld: input.desiredTld },
         schemeClassifier,
+        httpSchemePrefix + text,
+        desiredTld,
       );
 
       if (httpScheme !== 'http') throw new Error();
@@ -293,7 +309,7 @@ export class AutocompleteInput {
       ) {
         // Manually re-jigger the parsed parts to match |text| (without the
         // http scheme added).
-        input.url.protocol = '';
+        result.url.protocol = '';
         const components = [
           httpUrl.username,
           httpUrl.password,
@@ -308,15 +324,12 @@ export class AutocompleteInput {
         for (const component of components) {
         }
 
-        input = {
-          ...input,
+        return {
           url: httpUrl,
           scheme: '',
           canonicalizedUrl: httpCanonicalizedUrl,
           type: OmniboxInputType.URL,
         };
-
-        return input;
       }
 
       // We don't know about this scheme and it doesn't look like the user
@@ -325,11 +338,11 @@ export class AutocompleteInput {
       // the option of treating it as a URL if we're wrong.
       // Note that SegmentURL() is smart so we aren't tricked by "c:\foo" or
       // "www.example.com:81" in this case.
-      input.type = OmniboxInputType.UNKNOWN;
-      return input;
+      result.type = OmniboxInputType.UNKNOWN;
+      return result;
     }
 
-    const hostnameFamily = getHostnameFamily(input.url.hostname);
+    const hostnameFamily = getHostnameFamily(result.url.hostname);
 
     // Either the user didn't type a scheme, in which case we need to distinguish
     // between an HTTP URL and a query, or the scheme is HTTP or HTTPS, in which
@@ -341,10 +354,7 @@ export class AutocompleteInput {
     // IPv4 address but with a non-empty desired TLD would return IPV4 before
     // fixup and NEUTRAL afterwards, and we want to treat it as NEUTRAL).
     // TODO(sentialx): canonicalize host
-    if (
-      hostnameFamily === HostnameFamily.NEUTRAL &&
-      input.text.indexOf(' ') !== -1
-    ) {
+    if (hostnameFamily === HostnameFamily.NEUTRAL && text.indexOf(' ') !== -1) {
       // Invalid hostname.  There are several possible cases:
       // * The user is typing a multi-word query.  If we see a space anywhere in
       //   the input host we assume this is a search and return QUERY.  (We check
@@ -363,21 +373,21 @@ export class AutocompleteInput {
       // These might be possible in intranets, but we're not going to support them
       // without concrete evidence that doing so is necessary.
 
-      input.type =
-        isNonEmpty(input.url.protocol) ||
-        (hasKnownTld && input.url.hostname.indexOf(' ') === -1)
+      result.type =
+        isNonEmpty(result.url.protocol) ||
+        (hasKnownTld && result.url.hostname.indexOf(' ') === -1)
           ? OmniboxInputType.UNKNOWN
           : OmniboxInputType.QUERY;
 
-      return input;
+      return result;
     }
 
     // For hostnames that look like IP addresses, distinguish between IPv6
     // addresses, which are basically guaranteed to be navigations, and IPv4
     // addresses, which are much fuzzier.
     if (hostnameFamily === HostnameFamily.IPV6) {
-      input.type = OmniboxInputType.URL;
-      return input;
+      result.type = OmniboxInputType.URL;
+      return result;
     }
 
     if (hostnameFamily === HostnameFamily.IPV4) {
@@ -393,7 +403,7 @@ export class AutocompleteInput {
       // that we'll allow explicit attempts to navigate to "0.0.0.0".  If the
       // input was anything else (e.g. "0"), we'll fall through to returning QUERY
       // afterwards.
-      const address = input.url.hostname.split('.');
+      const address = result.url.hostname.split('.');
       if (
         address[0] !== '0' ||
         (address[1] === '0' && address[2] === '0' && address[3] === '0')
@@ -417,42 +427,43 @@ export class AutocompleteInput {
         // call to CanonicalizeHost() will return NEUTRAL here.  Since it's not
         // clear what the user intended, we fall back to our other heuristics.
         if (address.length === 4) {
-          input.type = OmniboxInputType.URL;
-          return input;
+          result.type = OmniboxInputType.URL;
+          return result;
         }
       }
 
       // By this point, if we have an "IP" with first octet zero, we know it
       // wasn't "0.0.0.0", so mark it as non-navigable.
       if (address[0] === '0') {
-        input.type = OmniboxInputType.QUERY;
-        return input;
+        result.type = OmniboxInputType.QUERY;
+        return result;
       }
     }
 
     // Now that we've ruled out all schemes other than http or https and done a
     // little more sanity checking, the presence of a scheme means this is likely
     // a URL.
-    if (isNonEmpty(input.url.protocol)) {
-      input.type = OmniboxInputType.URL;
-      return input;
+    if (isNonEmpty(result.url.protocol)) {
+      result.type = OmniboxInputType.URL;
+      return result;
     }
 
     // Check to see if the username is set and, if so, whether it contains a
     // space.  Usernames usually do not contain a space.  If a username contains
     // a space, that's likely an indication of incorrectly parsing of the input.
     const usernameHasSpace =
-      isNonEmpty(input.url.username) && input.url.username.indexOf(' ') !== -1;
+      isNonEmpty(result.url.username) &&
+      result.url.username.indexOf(' ') !== -1;
 
     // Generally, trailing slashes force the input to be treated as a URL.
     // However, if the username has a space, this may be input like
     // "dep missing: @test/", which should not be parsed as a URL (with the
     // username "dep missing: ").
-    if (isNonEmpty(input.url.pathname) && !usernameHasSpace) {
-      const c = input.url.pathname[input.url.pathname.length - 1];
+    if (isNonEmpty(result.url.pathname) && !usernameHasSpace) {
+      const c = result.url.pathname[result.url.pathname.length - 1];
       if (c === '\\' || c === '/') {
-        input.type = OmniboxInputType.URL;
-        return input;
+        result.type = OmniboxInputType.URL;
+        return result;
       }
     }
 
@@ -461,25 +472,25 @@ export class AutocompleteInput {
     // scheme/trailing slash.
     if (
       hostnameFamily === HostnameFamily.IPV4 &&
-      input.url.hostname.split('.').length > 1
+      result.url.hostname.split('.').length > 1
     ) {
-      input.type = OmniboxInputType.QUERY;
-      return input;
+      result.type = OmniboxInputType.QUERY;
+      return result;
     }
 
     // The URL did not have an explicit scheme and has an unusual-looking
     // username (with a space).  It's not likely to be a URL.
     if (usernameHasSpace) {
-      input.type = OmniboxInputType.UNKNOWN;
-      return input;
+      result.type = OmniboxInputType.UNKNOWN;
+      return result;
     }
 
     // If there is more than one recognized non-host component, this is likely to
     // be a URL, even if the TLD is unknown (in which case this is likely an
     // intranet URL).
-    if (numNonHostComponents(input.url as any) > 1) {
-      input.type = OmniboxInputType.URL;
-      return input;
+    if (numNonHostComponents(result.url as any) > 1) {
+      result.type = OmniboxInputType.URL;
+      return result;
     }
 
     // If we reach here with a username, our input looks something like
@@ -488,16 +499,16 @@ export class AutocompleteInput {
     // there _is_ a desired TLD, the user hit ctrl-enter, and we assume that
     // implies an attempted navigation.)
     // TODO(sentialx): canonicalized url.
-    if (input.url.username && !isNonEmpty(input.desiredTld)) {
-      input.type = OmniboxInputType.UNKNOWN;
-      return input;
+    if (result.url.username && !isNonEmpty(desiredTld)) {
+      result.type = OmniboxInputType.UNKNOWN;
+      return result;
     }
 
     // If the host has a known TLD or a port, it's probably a URL. Just localhost
     // is considered a valid host name due to https://tools.ietf.org/html/rfc6761.
-    if (hasKnownTld || input.url.hostname === 'localhost' || input.url.port) {
-      input.type = OmniboxInputType.URL;
-      return input;
+    if (hasKnownTld || result.url.hostname === 'localhost' || result.url.port) {
+      result.type = OmniboxInputType.URL;
+      return result;
     }
 
     // No scheme, username, port, and no known TLD on the host.
@@ -514,7 +525,7 @@ export class AutocompleteInput {
     //   QUERY.  Since this is indistinguishable from the case above, and this
     //   case is much more likely, claim these are UNKNOWN, which should default
     //   to the right thing and let users correct us on a case-by-case basis.
-    input.type = OmniboxInputType.UNKNOWN;
-    return input;
+    result.type = OmniboxInputType.UNKNOWN;
+    return result;
   }
 }
