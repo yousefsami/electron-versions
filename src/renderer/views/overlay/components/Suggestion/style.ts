@@ -8,17 +8,9 @@ export const StyledSuggestion = styled.div`
   height: 38px;
   min-height: 38px;
   display: flex;
-  position: relative;
   align-items: center;
   overflow: hidden;
-  ${({
-    selected,
-    theme,
-  }: {
-    selected: boolean;
-    hovered: boolean;
-    theme?: ITheme;
-  }) => css`
+  ${({ selected, theme }: { selected: boolean; theme?: ITheme }) => css`
     ${selected
       ? css`
           background-color: ${theme!['searchBox.lightForeground']

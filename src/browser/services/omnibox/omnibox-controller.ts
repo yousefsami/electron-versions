@@ -57,6 +57,9 @@ export class OmniboxController {
         schemeClassifier,
       );
 
+      input.preventInlineAutocomplete = true;
+      input.wantAsynchronousMatches = false;
+
       return (await this.start(input))[0];
     };
 

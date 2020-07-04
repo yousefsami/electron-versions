@@ -31,12 +31,38 @@ export class OmniboxStore {
   public suggestions: IAutocompleteMatch[] = [];
 
   @observable
-  public selectedSuggestionId = 0;
+  private _selectedSuggestionId = 0;
 
   @computed
   public get selectedSuggestion() {
     if (this.selectedSuggestionId > this.suggestions.length - 1) return null;
     return this.suggestions[this.selectedSuggestionId];
+  }
+
+  @computed
+  public get selectedSuggestionId() {
+    return this._selectedSuggestionId;
+  }
+
+  public set selectedSuggestionId(value: number) {
+    if (value > this.suggestions.length - 1) value = 0;
+    if (value < 0) value = this.suggestions.length - 1;
+
+    if (this._selectedSuggestionId === value) return;
+
+    this._selectedSuggestionId = value;
+
+    const item = this.selectedSuggestion;
+    if (!this.inputRef.current) {
+      console.error();
+      return;
+    }
+
+    this.inputRef.current.value = item?.fillIntoEdit ?? '';
+  }
+
+  public resetSelectedSuggestion() {
+    this._selectedSuggestionId = 0;
   }
 
   public canSuggest = false;
@@ -93,4 +119,16 @@ export class OmniboxStore {
     this.inputRef.current.value = '';
     this.suggestions = [];
   }
+
+  public navigateToURL = (suggestionId: number) => {
+    if (!this.inputRef.current) return console.error();
+
+    browser.ipcRenderer.invoke(
+      'omnibox-enter-pressed',
+      this.inputRef.current.value,
+      suggestionId,
+    );
+
+    store.omnibox.hide();
+  };
 }

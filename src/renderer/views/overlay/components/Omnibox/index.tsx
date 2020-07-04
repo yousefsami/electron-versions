@@ -10,14 +10,7 @@ const onKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
   if (e.which === 13) {
     // Enter.
     e.preventDefault();
-
-    browser.ipcRenderer.invoke(
-      'omnibox-enter-pressed',
-      e.currentTarget.value,
-      store.omnibox.selectedSuggestionId,
-    );
-
-    store.omnibox.hide();
+    store.omnibox.navigateToURL(store.omnibox.selectedSuggestionId);
   }
 };
 
@@ -28,26 +21,9 @@ const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
 
   if (e.key === 'Escape') {
     store.omnibox.hide({ focus: true, escape: true });
-  } else if (e.keyCode === 38 || e.keyCode === 40) {
+  } else if (e.keyCode === 38 /* Up */ || e.keyCode === 40 /* Down */) {
     e.preventDefault();
-    if (
-      e.keyCode === 40 &&
-      store.omnibox.selectedSuggestionId + 1 <=
-        store.omnibox.suggestions.length - 1
-    ) {
-      store.omnibox.selectedSuggestionId++;
-    } else if (
-      e.keyCode === 38 &&
-      store.omnibox.selectedSuggestionId - 1 >= 0
-    ) {
-      store.omnibox.selectedSuggestionId--;
-    }
-
-    const suggestion = store.omnibox.selectedSuggestion;
-
-    if (!suggestion) return console.error();
-
-    input.value = suggestion.fillIntoEdit ?? '';
+    store.omnibox.selectedSuggestionId += e.keyCode === 40 ? 1 : -1;
   }
 };
 
@@ -86,17 +62,25 @@ const onInput = async (e: any) => {
   }
 
   store.omnibox.suggestions = matches;
-  store.omnibox.selectedSuggestionId = 0;
+  store.omnibox.resetSelectedSuggestion();
 };
 
 export const Omnibox = observer(() => {
+  let timeout: any;
+
   const ref = React.useRef<HTMLDivElement>();
 
   const region = store.getRegion('omnibox');
   const suggestionsVisible = store.omnibox.suggestions.length !== 0;
 
   const onBlur = React.useCallback(() => {
-    store.omnibox.hide();
+    timeout = setTimeout(() => {
+      store.omnibox.hide();
+    });
+  }, []);
+
+  const onFocus = React.useCallback(() => {
+    clearTimeout(timeout);
   }, []);
 
   requestAnimationFrame(() => {
@@ -117,10 +101,11 @@ export const Omnibox = observer(() => {
 
   return (
     <StyledOmnibox
-      ref={ref}
+      ref={ref as any}
       tabIndex={0}
       style={{ left: region.left, top: region.top, width: store.omnibox.width }}
       onBlur={onBlur}
+      onFocus={onFocus}
       visible={store.omnibox.visible}
     >
       <SearchBox>

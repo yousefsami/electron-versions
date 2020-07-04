@@ -15,7 +15,7 @@ export const DialogBaseStyle = styled.div`
   position: absolute;
 
   ${({ theme, visible }: { theme?: ITheme; visible?: boolean }) => css`
-    background-color: ${theme['dialog.backgroundColor']};
+    background-color: ${theme!['dialog.backgroundColor']};
     opacity: ${visible ? 1 : 0};
     pointer-events: ${visible ? 'inherit' : 'none'};
   `}

@@ -17,31 +17,24 @@ interface Props {
   id: number;
 }
 
-const onClick = (suggestion: IAutocompleteMatch) => () => {
-  let url = suggestion.destinationUrl; // TODO(sentialx): suggestion.isSearch ? suggestion.primaryText : suggestion.url;
-
-  if (suggestion.isSearch) {
-    url = store.omnibox.searchEngine.url.replace('%s', url);
-  } else if (url.indexOf('://') === -1) {
-    url = `http://${url}`;
-  }
-
-  browser.tabs.update(store.tabId, { url });
-
-  store.omnibox.hide();
+const onClick = (id: number) => () => {
+  store.omnibox.navigateToURL(id);
 };
 
 export const Suggestion = observer(({ suggestion, id }: Props) => {
-  // const { hovered } = suggestion;
   const { contents, description, favicon } = suggestion;
 
   const selected = store.omnibox.selectedSuggestionId === id;
 
+  const onMouseDown = React.useCallback(() => {
+    store.omnibox.selectedSuggestionId = id;
+  }, [id]);
+
   return (
     <StyledSuggestion
       selected={selected}
-      hovered={false}
-      onClick={onClick(suggestion)}
+      onMouseDown={onMouseDown}
+      onClick={onClick(id)}
     >
       <Icon
         style={{

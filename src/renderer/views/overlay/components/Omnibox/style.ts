@@ -6,10 +6,11 @@ import { DialogBaseStyle } from '~/renderer/mixins/dialogs';
 export const StyledOmnibox = styled(DialogBaseStyle)`
   transition: 0.1s opacity;
   padding-bottom: 4px;
+  outline: none;
 
   ${({ theme }: { theme?: ITheme }) => css`
-    background-color: ${theme['searchBox.backgroundColor']};
-    color: ${theme['searchBox.lightForeground']
+    background-color: ${theme!['searchBox.backgroundColor']};
+    color: ${theme!['searchBox.lightForeground']
       ? 'rgba(255, 255, 255, 0.87)'
       : 'black'};
   `}
@@ -48,7 +49,7 @@ export const Input = styled.input.attrs(() => ({
 
   ${({ theme }: { theme?: ITheme }) => css`
     &::placeholder {
-      color: ${theme['searchBox.lightForeground']
+      color: ${theme!['searchBox.lightForeground']
         ? 'rgba(255, 255, 255, 0.54)'
         : 'rgba(0, 0, 0, 0.54)'};
     }

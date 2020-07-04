@@ -9,13 +9,9 @@ interface Props {
   visible: boolean;
 }
 
-const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-  e.stopPropagation();
-};
-
 export const Suggestions = observer(({ visible }: Props) => {
   return (
-    <StyledSuggestions visible={visible} onMouseDown={onMouseDown}>
+    <StyledSuggestions visible={visible}>
       {store.omnibox.suggestions.map((suggestion, key) => (
         <Suggestion suggestion={suggestion} key={key} id={key} />
       ))}
