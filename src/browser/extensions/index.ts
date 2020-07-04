@@ -1,10 +1,8 @@
 import { BackgroundPages } from './background-pages';
-import { hookExtensionWebRequestBypass } from './web-request';
 
 import { CookiesAPI } from './api/cookies';
 import { TabsAPI } from './api/tabs';
 import { WindowsAPI } from './api/windows';
-import { WebRequestAPI } from './api/web-request';
 import { BrowserActionAPI } from './api/browser-action';
 import { OverlayPrivateAPI } from './api/overlay-private';
 import { BrowserActionPrivateAPI } from './api/browser-action-private';
@@ -20,7 +18,6 @@ export class Extensions {
 
   public cookies = new CookiesAPI();
   public windows = new WindowsAPI();
-  public webRequest = new WebRequestAPI();
   public browserAction = new BrowserActionAPI();
   public bookmarks = new BookmarksAPI();
   public history = new HistoryAPI();
@@ -40,7 +37,6 @@ export class Extensions {
     }
     session.setPreloads(session.getPreloads().concat(preloadPath));
 
-    hookExtensionWebRequestBypass(session);
     this.cookies.observeSession(session);
   }
 }
