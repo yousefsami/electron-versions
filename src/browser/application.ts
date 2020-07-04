@@ -19,7 +19,7 @@ export class Application {
   public windows: WindowsService = new WindowsService();
 
   // public settings = new Settings();
-  public tabs = new Tabs();
+  public tabs: Tabs;
 
   public contextMenus: ContextMenusService;
 
@@ -96,6 +96,7 @@ export class Application {
     this.storage = new StorageService();
     this.overlay = new OverlayService();
     this.omnibox = new OmniboxController();
+    this.tabs = new Tabs();
     this.contextMenus = new ContextMenusService();
 
     const browserContext = await BrowserContext.from(

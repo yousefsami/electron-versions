@@ -55,7 +55,7 @@ const onMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
   mouseUpped = true;
 };
 
-const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+const onKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
   if (e.key === 'Escape' || e.key === 'Enter') {
     store.tabs.selectedTab.addressbarValue = null;
   }
@@ -70,23 +70,12 @@ const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
   if (e.key === 'Enter') {
     store.addressbarFocused = false;
     e.currentTarget.blur();
-    const { value } = e.currentTarget;
-    let url = value;
 
-    if (isURL(value) || true) {
-      // TODO @sentialx
-      url = value.indexOf('://') === -1 ? `http://${value}` : value;
-    } else {
-      url = store.settings.searchEngine.url.replace('%s', value);
-    }
-
-    store.tabs.selectedTab.addressbarValue = url;
-    browser.ipcRenderer.send(
-      'trigger-favicon-update',
-      store.tabs.selectedTab.id,
-      url,
+    const url = await browser.ipcRenderer.invoke(
+      'omnibox-enter-pressed',
+      e.currentTarget.value,
     );
-    browser.tabs.update(store.tabs.selectedTabId, { url });
+    if (url) store.tabs.selectedTab.addressbarValue = url;
   }
 };
 

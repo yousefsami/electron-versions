@@ -1,4 +1,4 @@
-import { URLRow } from './omnibox/url-row';
+import { URLRow } from '~/common/history/url-row';
 
 export interface IHistoryService {
   autocompleteForPrefix: (

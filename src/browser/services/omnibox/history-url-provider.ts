@@ -1,3 +1,7 @@
+// Copyright 2014 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
 import { IAutocompleteProvider } from './autocomplete-provider';
 import { URLPrefix } from './url-prefix';
 import { Application } from '~/browser/application';
@@ -6,9 +10,8 @@ import { format } from 'url';
 import { IAutocompleteMatch, getMatchComponents } from './autocomplete-match';
 import { IHistoryMatch } from './history-match';
 import { IHistoryService } from '../history-service';
-import { URLRow } from './url-row';
+import { URLRow } from '~/common/history/url-row';
 import { IAutocompleteInput, OmniboxInputType } from './autocomplete-input';
-import { DCHECK } from '~/common/utils/debug';
 
 const kLowQualityMatchTypedLimit = 1;
 const kLowQualityMatchVisitLimit = 4;
@@ -131,7 +134,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
     this.trimHttp = !hasHTTPScheme(input.text);
     this.promoteType = PromoteType.NEITHER;
     this.whatYouTypedMatch = {
-      destinationUrl: input.text,
+      destinationUrl: input.canonicalizedUrl,
       fillIntoEdit: input.text,
       contents: input.text,
       allowedToBeDefaultMatch: false,
@@ -281,7 +284,7 @@ export class HistoryURLProvider implements IAutocompleteProvider {
       for (const urlMatch of urlMatches) {
         const url = urlMatch.url;
         const bestPrefix = URLPrefix.bestURLPrefix(url, '');
-        DCHECK(bestPrefix);
+        if (!bestPrefix) return console.error();
 
         const match: IHistoryMatch = {
           urlInfo: urlMatch,

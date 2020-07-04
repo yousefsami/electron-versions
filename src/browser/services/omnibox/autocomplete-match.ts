@@ -1,3 +1,9 @@
+// Copyright 2014 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+import { parsePossiblyInvalidURL } from '~/common/utils/url';
+
 export interface IAutocompleteMatch {
   // The URL to actually load when the autocomplete item is selected. This URL
   // should be canonical so we can compare URLs with strcmp to avoid dupes.
@@ -36,15 +42,6 @@ export interface IAutocompleteMatch {
 
   favicon?: string;
 }
-
-export const parsePossiblyInvalidURL = (url: string) => {
-  try {
-    return new URL(url);
-  } catch (e) {
-    if (url.indexOf(' ') !== -1) return {} as URL;
-    else return new URL(`empty://${url}`);
-  }
-};
 
 export const getMatchComponents = (url: string, matchPositions: number[][]) => {
   const parsed = parsePossiblyInvalidURL(url);

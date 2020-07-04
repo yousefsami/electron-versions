@@ -11,15 +11,11 @@ const onKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // Enter.
     e.preventDefault();
 
-    const suggestion = store.omnibox.selectedSuggestion;
-    if (!suggestion) return console.error();
-
-    browser.ipcRenderer.send(
-      'trigger-favicon-update',
-      store.tabId,
-      suggestion.destinationUrl,
+    browser.ipcRenderer.invoke(
+      'omnibox-enter-pressed',
+      e.currentTarget.value,
+      store.omnibox.selectedSuggestionId,
     );
-    browser.tabs.update(store.tabId, { url: suggestion.destinationUrl });
 
     store.omnibox.hide();
   }

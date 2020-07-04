@@ -92,7 +92,7 @@ export class TabsAPI extends EventHandler implements ITabsEvents {
     handler('getSelected', this.getSelectedHandler);
     handler('getAllInWindow', this.getAllInWindow);
     handler('query', this.query);
-    handler('update', this.update);
+    handler('update', this.updateHandler);
     handler('reload', this.reload);
     handler('remove', this.remove);
     handler('insertCSS', this.insertCSS);
@@ -111,7 +111,7 @@ export class TabsAPI extends EventHandler implements ITabsEvents {
     details: chrome.tabs.CreateProperties,
   ) => Promise<number>;
 
-  public async update(
+  private async updateHandler(
     { session }: ISenderDetails,
     {
       tabId,
@@ -121,18 +121,25 @@ export class TabsAPI extends EventHandler implements ITabsEvents {
     const tab = this.getTabById(session, tabId);
     if (!tab) return null;
 
+    return this.update(tab, updateProperties);
+  }
+
+  public async update(
+    webContents: Electron.WebContents,
+    updateProperties: chrome.tabs.UpdateProperties,
+  ) {
     const { url, muted, active } = updateProperties;
 
     // TODO: validate URL, prevent 'javascript:'
-    if (url) tab.loadURL(url);
+    if (url) webContents.loadURL(url);
 
-    if (typeof muted === 'boolean') tab.setAudioMuted(muted);
+    if (typeof muted === 'boolean') webContents.setAudioMuted(muted);
 
-    if (active) this.activate({ session }, { tabId });
+    if (active) this.activate(webContents);
 
-    this.onUpdated(tab);
+    this.onUpdated(webContents);
 
-    return this.createDetails(tab);
+    return this.createDetails(webContents);
   }
 
   public async getNavigationState(
@@ -165,17 +172,14 @@ export class TabsAPI extends EventHandler implements ITabsEvents {
     tab.goForward();
   }
 
-  public activate({ session }: ISenderDetails, { tabId }: { tabId: number }) {
-    const tab = this.getTabById(session, tabId);
-    if (!tab) return;
-
+  public activate(tab: Electron.WebContents) {
     const details = this.getDetails(tab);
 
     const activeChanged = !details.active;
 
     this.detailsCache.forEach((tabInfo, cacheTab) => {
       if (details.windowId === cacheTab.windowId) {
-        tabInfo.active = tabId === cacheTab.id;
+        tabInfo.active = tab.id === cacheTab.id;
       }
     });
 
@@ -183,7 +187,7 @@ export class TabsAPI extends EventHandler implements ITabsEvents {
 
     this.emit('activated', tab.id, details.windowId);
     this.sendEventToAll('onActivated', {
-      tabId,
+      tabId: tab.id,
       windowId: details.windowId,
     });
   }
@@ -351,7 +355,7 @@ export class TabsAPI extends EventHandler implements ITabsEvents {
 
     this.observe(tab);
 
-    this.update({ session }, { tabId: tab.id, updateProperties: details });
+    this.update(tab, details);
 
     return tabDetails;
   }

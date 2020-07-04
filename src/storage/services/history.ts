@@ -23,7 +23,7 @@ import { HistoryServiceBase } from '~/common/services/history';
 import { WorkerMessengerFactory } from '~/common/worker-messenger-factory';
 import { registerWorkerEventPropagator } from '../worker-event-handler';
 import { IHistoryPrivateChunkDetails } from '~/interfaces/history-private';
-import { URLRow } from '~/browser/services/omnibox/url-row';
+import { URLRow } from '~/common/history/url-row';
 import { IHistoryService } from '~/browser/services/history-service';
 
 const ITEM_SELECT =

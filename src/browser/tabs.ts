@@ -1,6 +1,6 @@
 import { Tab } from './tab';
 import { extensions } from './extensions';
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain, webContents } from 'electron';
 import { Application } from './application';
 import { parse } from 'url';
 import { ICON_PAGE } from '~/renderer/constants';
@@ -50,9 +50,15 @@ export class Tabs {
       // this.emit('activated', id);
     });
 
-    ipcMain.on('trigger-favicon-update', (e, tabId, url) => {
+    Application.instance.omnibox.onNavigationRequested = (tab, url) => {
+      const window = Application.instance.windows.fromWebContents(tab);
+      if (!window) return console.error();
+
+      const tabId = window.selectedTabId;
+
       this.triggerFaviconUpdateForURL(tabId, url, true);
-    });
+      extensions.tabs.update(webContents.fromId(tabId), { url });
+    };
 
     extensions.tabs.on('updated', async (tabId, changeInfo, details) => {
       const { storage } = Application.instance;

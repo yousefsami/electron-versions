@@ -10,6 +10,8 @@ import { ICON_PAGE } from '~/renderer/constants';
 export class OmniboxController {
   private providers: IAutocompleteProvider[] = [];
 
+  private matches: IAutocompleteMatch[] = [];
+
   constructor() {
     this.providers.push(new HistoryURLProvider());
 
@@ -23,7 +25,7 @@ export class OmniboxController {
 
     ipcMain.handle(
       'omnibox-input-changed',
-      (e, text, cursorPosition, justRemoved) => {
+      async (e, text, cursorPosition, justRemoved) => {
         const input = AutocompleteInput.init(
           {
             text,
@@ -33,7 +35,41 @@ export class OmniboxController {
         );
         input.preventInlineAutocomplete = justRemoved;
 
-        return this.start(input);
+        this.matches = await this.start(input);
+
+        return this.matches;
+      },
+    );
+
+    const getSelectedOrEnteredMatch = async (
+      text: string,
+      index: number | undefined,
+    ): Promise<IAutocompleteMatch | undefined> => {
+      if (index != undefined) {
+        const match = this.matches[index];
+        if (match) return match;
+      }
+
+      const input = AutocompleteInput.init(
+        {
+          text,
+        },
+        schemeClassifier,
+      );
+
+      return (await this.start(input))[0];
+    };
+
+    ipcMain.handle(
+      'omnibox-enter-pressed',
+      async (e, text: string, suggestionIndex: number | undefined) => {
+        const match = await getSelectedOrEnteredMatch(text, suggestionIndex);
+        console.log(match);
+        if (!match) return console.error();
+
+        this.onNavigationRequested?.(e.sender, match.destinationUrl);
+
+        return match.destinationUrl;
       },
     );
 
@@ -45,6 +81,10 @@ export class OmniboxController {
       window.send('addressbar-update-input', data);
     });
   }
+
+  public onNavigationRequested:
+    | ((webContents: Electron.WebContents, url: string) => void)
+    | undefined;
 
   public async start(input: IAutocompleteInput): Promise<IAutocompleteMatch[]> {
     if (input.text.trim() === '') return [];

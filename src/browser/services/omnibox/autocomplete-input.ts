@@ -1,3 +1,7 @@
+// Copyright 2014 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
 import { IAutocompleteSchemeClassifier } from './autocomplete-classifier';
 import {
   isStringAValidURL,
@@ -6,7 +10,8 @@ import {
 } from './history-url-provider';
 
 import * as ip from 'is-ip';
-import { parsePossiblyInvalidURL } from './autocomplete-match';
+import { parsePossiblyInvalidURL } from '~/common/utils/url';
+import { format } from 'url';
 
 // The type of page currently displayed when the user used the omnibox.
 enum PageClassification {
@@ -237,9 +242,7 @@ export class AutocompleteInput {
     result.canonicalizedUrl = result.url.href;
 
     if (result.url.protocol === 'empty:') {
-      const newUrl = new URL(result.url.href);
-      newUrl.protocol = 'http:';
-      result.canonicalizedUrl = newUrl.href;
+      result.canonicalizedUrl = result.url.href.replace('empty:', 'http:');
     }
 
     result.scheme = result.url.protocol;
@@ -248,7 +251,6 @@ export class AutocompleteInput {
     // system isn't going to be able to produce a navigable URL match for it.
     // So we just return QUERY immediately in these cases.
     // input.canonicalizedUrl = input.text; // TODO(sentialx): FixupURL()
-
     if (!isStringAValidURL(result.canonicalizedUrl)) {
       result.type = OmniboxInputType.QUERY;
       return result;
@@ -493,7 +495,7 @@ export class AutocompleteInput {
       return result;
     }
 
-    // If we reach here with a username, our input looks something like
+    // If we reach here with a username , our input looks something like
     // "user@host".  Unless there is a desired TLD, we think this is more likely
     // an email address than an HTTP auth attempt, so we search by default.  (When
     // there _is_ a desired TLD, the user hit ctrl-enter, and we assume that

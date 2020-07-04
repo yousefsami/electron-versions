@@ -12,7 +12,7 @@ import { extensions } from '../extensions';
 import { HistoryServiceBase } from '~/common/services/history';
 import { WorkerMessengerFactory } from '~/common/worker-messenger-factory';
 import { IHistoryPrivateChunkDetails } from '~/interfaces/history-private';
-import { URLRow } from './omnibox/url-row';
+import { URLRow } from '~/common/history/url-row';
 import { IHistoryService } from './history-service';
 
 export class HistoryService extends HistoryServiceBase
